@@ -69,7 +69,6 @@ def generate_and_save_room_maps(name_prefix, seed_range):
         map_name = f"{name_prefix}-seed-{str(seed).zfill(max_digits)}"
         test_maps[map_name] = map_data
     maps_dict_to_yaml(f'{name_prefix}.yaml', test_maps)
-    print(f"Saved {len(test_maps)} maps to {name_prefix}.yaml")
 
 def main():
     generate_and_save_room_maps("validation-room", range(0, 128))
