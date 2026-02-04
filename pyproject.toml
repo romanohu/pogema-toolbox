@@ -1,0 +1,23 @@
+[project]
+name = "pogema-toolbox"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "dask[distributed]>=2026.1.2",
+    "importlib-metadata==4.13.0",
+    "loguru>=0.7.3",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "pogema",
+    "pydantic>=1.8.2",
+    "pyyaml>=6.0.3",
+    "seaborn~=0.13.2",
+    "tabulate>=0.8.7",
+    "wandb>=0.24.1",
+]
+
+[tool.uv.sources]
+pogema = { git = "https://github.com/kei18/pogema" }
