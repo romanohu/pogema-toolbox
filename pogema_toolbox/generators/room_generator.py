@@ -67,14 +67,29 @@ def generate_room(
         dtype="int",
     )
 
-    obs_prob = rng.uniform(0, 1, size=room.shape)
-    room[obs_prob < obstacle_density] = 1
+    if room_width <= 0 or room_height <= 0:
+        raise ValueError("room_width and room_height must be positive integers")
+    if num_rows <= 0 or num_cols <= 0:
+        raise ValueError("num_rows and num_cols must be positive integers")
+    if not 0.0 <= obstacle_density <= 1.0:
+        raise ValueError("obstacle_density must be in [0.0, 1.0]")
 
-    if only_centre_obstacles:
-        room[0:: room_height + 1, :] = 0
-        room[:, 0:: room_width + 1] = 0
-        room[room_height - 1:: room_height + 1, :] = 0
-        room[:, room_width - 1:: room_width + 1] = 0
+    obstacle_mask = np.zeros_like(room, dtype=bool)
+
+    for r in range(num_rows):
+        row_start = r * (room_height + 1)
+        row_end = row_start + room_height
+        for c in range(num_cols):
+            col_start = c * (room_width + 1)
+            col_end = col_start + room_width
+
+            if only_centre_obstacles and room_height >= 3 and room_width >= 3:
+                obstacle_mask[row_start + 1 : row_end - 1, col_start + 1 : col_end - 1] = True
+            else:
+                obstacle_mask[row_start:row_end, col_start:col_end] = True
+
+    obs_prob = rng.uniform(0, 1, size=room.shape)
+    room[(obs_prob < obstacle_density) & obstacle_mask] = 1
 
     room[room_height:: room_height + 1, :] = 1
     room[:, room_width:: room_width + 1] = 1
