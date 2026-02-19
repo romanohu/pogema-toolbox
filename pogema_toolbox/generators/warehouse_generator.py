@@ -35,7 +35,7 @@ class WarehouseRangeSettings:
     num_wall_cols_max: Optional[int] = None
 
     wfi_instance: bool = False
-    block_extra_space: bool = True
+    block_extra_space: bool = False
 
     def sample(self, seed=None):
         rng = np.random.default_rng(seed)
@@ -120,7 +120,7 @@ def generate_warehouse(
     horizontal_gap,
     vertical_gap,
     wfi_instance=False,
-    block_extra_space=True,
+    block_extra_space=False,
     seed=None,
 ):
     grid = np.zeros((height, width), dtype=int)
