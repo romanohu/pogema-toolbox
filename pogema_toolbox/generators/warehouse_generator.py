@@ -125,11 +125,26 @@ def generate_warehouse(
 ):
     grid = np.zeros((height, width), dtype=int)
 
-    for row in range(num_wall_rows):
-        row_start = vertical_gap * (row + 1) + wall_height * row
-        for col in range(num_wall_cols):
-            col_start = side_pad + col * (wall_width + horizontal_gap)
-            grid[row_start:row_start + wall_height, col_start:col_start + wall_width] = 1
+    def place_walls(row_from, row_to, col_from, col_to):
+        for row in range(row_from, row_to):
+            row_start = vertical_gap * (row + 1) + wall_height * row
+            for col in range(col_from, col_to):
+                col_start = side_pad + col * (wall_width + horizontal_gap)
+                grid[row_start:row_start + wall_height, col_start:col_start + wall_width] = 1
+
+    place_walls(0, num_wall_rows, 0, num_wall_cols)
+
+    if not block_extra_space:
+        max_wall_rows = (height - vertical_gap) // (wall_height + vertical_gap)
+        max_wall_cols = (width - side_pad * 2 + horizontal_gap) // (wall_width + horizontal_gap)
+
+        max_wall_rows = max(0, max_wall_rows)
+        max_wall_cols = max(0, max_wall_cols)
+
+        if max_wall_cols > num_wall_cols:
+            place_walls(0, min(num_wall_rows, max_wall_rows), num_wall_cols, max_wall_cols)
+        if max_wall_rows > num_wall_rows:
+            place_walls(num_wall_rows, max_wall_rows, 0, max_wall_cols)
 
     if block_extra_space:
         grid = block_extra_warehouse_space(
