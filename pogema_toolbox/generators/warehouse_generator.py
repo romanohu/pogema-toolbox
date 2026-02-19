@@ -91,24 +91,6 @@ class WarehouseRangeSettings:
         }
 
 
-def block_extra_warehouse_space(
-    grid,
-    num_wall_rows,
-    num_wall_cols,
-    wall_width,
-    wall_height,
-    side_pad,
-    horizontal_gap,
-    vertical_gap,
-):
-    wh_height = vertical_gap * (num_wall_rows + 1) + wall_height * num_wall_rows
-    wh_width = side_pad * 2 + wall_width * num_wall_cols + horizontal_gap * (num_wall_cols - 1)
-
-    grid[wh_height:, :] = 1
-    grid[:, wh_width:] = 1
-    return grid
-
-
 def generate_warehouse(
     width,
     height,
@@ -125,15 +107,6 @@ def generate_warehouse(
 ):
     grid = np.zeros((height, width), dtype=int)
 
-    def place_walls(row_from, row_to, col_from, col_to):
-        for row in range(row_from, row_to):
-            row_start = vertical_gap * (row + 1) + wall_height * row
-            for col in range(col_from, col_to):
-                col_start = side_pad + col * (wall_width + horizontal_gap)
-                grid[row_start:row_start + wall_height, col_start:col_start + wall_width] = 1
-
-    place_walls(0, num_wall_rows, 0, num_wall_cols)
-
     if not block_extra_space:
         max_wall_rows = (height - vertical_gap) // (wall_height + vertical_gap)
         max_wall_cols = (width - side_pad * 2 + horizontal_gap) // (wall_width + horizontal_gap)
@@ -141,22 +114,32 @@ def generate_warehouse(
         max_wall_rows = max(0, max_wall_rows)
         max_wall_cols = max(0, max_wall_cols)
 
-        if max_wall_cols > num_wall_cols:
-            place_walls(0, min(num_wall_rows, max_wall_rows), num_wall_cols, max_wall_cols)
-        if max_wall_rows > num_wall_rows:
-            place_walls(num_wall_rows, max_wall_rows, 0, max_wall_cols)
+        rows_to_place = max_wall_rows
+        cols_to_place = max_wall_cols
+    else:
+        rows_to_place = num_wall_rows
+        cols_to_place = num_wall_cols
+
+    layout_height = vertical_gap * (rows_to_place + 1) + wall_height * rows_to_place
+    layout_width = side_pad * 2
+    if cols_to_place > 0:
+        layout_width += wall_width * cols_to_place + horizontal_gap * (cols_to_place - 1)
+
+    offset_y = max(0, (height - layout_height) // 2)
+    offset_x = max(0, (width - layout_width) // 2)
+
+    for row in range(rows_to_place):
+        row_start = offset_y + vertical_gap * (row + 1) + wall_height * row
+        for col in range(cols_to_place):
+            col_start = offset_x + side_pad + col * (wall_width + horizontal_gap)
+            grid[row_start:row_start + wall_height, col_start:col_start + wall_width] = 1
 
     if block_extra_space:
-        grid = block_extra_warehouse_space(
-            grid,
-            num_wall_rows,
-            num_wall_cols,
-            wall_width,
-            wall_height,
-            side_pad,
-            horizontal_gap,
-            vertical_gap,
-        )
+        blocked_grid = np.ones_like(grid)
+        y_end = min(height, offset_y + layout_height)
+        x_end = min(width, offset_x + layout_width)
+        blocked_grid[offset_y:y_end, offset_x:x_end] = grid[offset_y:y_end, offset_x:x_end]
+        grid = blocked_grid
 
     return grid
 
