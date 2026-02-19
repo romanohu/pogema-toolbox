@@ -1,78 +1,124 @@
-import numpy as np
-
 from dataclasses import dataclass
+
+import numpy as np
 
 from pogema_toolbox.generators.generator_utils import maps_dict_to_yaml
 
+
 @dataclass
 class RoomRangeSettings:
-    room_size_min: int = 5
-    room_size_max: int = 10
-    rooms_x_min: int = 2
-    rooms_x_max: int = 4
-    rooms_y_min: int = 2
-    rooms_y_max: int = 4
-    door_size: int = 1
+    room_width_min: int = 5
+    room_width_max: int = 9
+
+    room_height_min: int = 5
+    room_height_max: int = 9
+
+    num_rows_min: int = 3
+    num_rows_max: int = 5
+
+    num_cols_min: int = 3
+    num_cols_max: int = 5
+
+    obstacle_density_min: float = 0.0
+    obstacle_density_max: float = 0.4
+
+    uniform: bool = True
+    only_centre_obstacles: bool = False
 
     def sample(self, seed=None):
         rng = np.random.default_rng(seed)
+
+        room_height = rng.integers(self.room_height_min, self.room_height_max + 1)
+        num_rows = rng.integers(self.num_rows_min, self.num_rows_max + 1)
+
+        if self.uniform:
+            room_width = room_height
+            num_cols = num_rows
+        else:
+            room_width = rng.integers(self.room_width_min, self.room_width_max + 1)
+            num_cols = rng.integers(self.num_cols_min, self.num_cols_max + 1)
+
+        obstacle_density = rng.uniform(self.obstacle_density_min, self.obstacle_density_max)
+
         return {
-            "room_size": int(rng.integers(self.room_size_min, self.room_size_max + 1)),
-            "rooms_x": int(rng.integers(self.rooms_x_min, self.rooms_x_max + 1)),
-            "rooms_y": int(rng.integers(self.rooms_y_min, self.rooms_y_max + 1)),
-            "door_size": self.door_size,
+            "room_width": room_width,
+            "room_height": room_height,
+            "num_rows": num_rows,
+            "num_cols": num_cols,
+            "obstacle_density": obstacle_density,
+            "only_centre_obstacles": self.only_centre_obstacles,
             "seed": seed,
         }
-    
+
+
+def generate_room(
+    room_width,
+    room_height,
+    num_rows,
+    num_cols,
+    obstacle_density,
+    only_centre_obstacles=False,
+    seed=None,
+):
+    rng = np.random.default_rng(seed)
+
+    room = np.zeros(
+        (room_height * num_rows + num_rows - 1, room_width * num_cols + num_cols - 1),
+        dtype="int",
+    )
+
+    obs_prob = rng.uniform(0, 1, size=room.shape)
+    room[obs_prob < obstacle_density] = 1
+
+    if only_centre_obstacles:
+        room[0:: room_height + 1, :] = 0
+        room[:, 0:: room_width + 1] = 0
+        room[room_height - 1:: room_height + 1, :] = 0
+        room[:, room_width - 1:: room_width + 1] = 0
+
+    room[room_height:: room_height + 1, :] = 1
+    room[:, room_width:: room_width + 1] = 1
+
+    row_doors = rng.integers(low=0, high=room_width, size=(num_rows - 1, num_cols))
+    offset = np.arange(num_cols) * (room_width + 1)
+    offset = np.expand_dims(offset, axis=0)
+    row_doors = offset + row_doors
+    np.put_along_axis(room[room_height:: room_height + 1, :], row_doors, 0, axis=1)
+
+    col_doors = rng.integers(low=0, high=room_height, size=(num_rows, num_cols - 1))
+    offset = np.arange(num_rows) * (room_height + 1)
+    offset = np.expand_dims(offset, axis=1)
+    col_doors = offset + col_doors
+    np.put_along_axis(room[:, room_width:: room_width + 1], col_doors, 0, axis=0)
+
+    return room
+
+
 class RoomGenerator:
     @staticmethod
-    def generate(room_size, rooms_x, rooms_y, door_size, seed=None):
-        rng = np.random.default_rng(seed)
-        WALL_THICK = 1
+    def generate(**kwargs):
+        room = generate_room(**kwargs)
+        return "\n".join("".join("." if cell == 0 else "#" for cell in row) for row in room)
 
-        height = (rooms_y * room_size) + ((rooms_y - 1) * WALL_THICK)
-        width = (rooms_x * room_size) + ((rooms_x - 1) * WALL_THICK)
-        grid = np.zeros((height, width), dtype=int)
 
-        for c in range(rooms_x - 1):
-            x_wall = (c + 1) * room_size + c * WALL_THICK
-            grid[:, x_wall : x_wall + WALL_THICK] = 1
-            
-        for r in range(rooms_y - 1):
-            y_wall = (r + 1) * room_size + r * WALL_THICK
-            grid[y_wall : y_wall + WALL_THICK, :] = 1
-
-        for c in range(rooms_x - 1):
-            x_wall = (c + 1) * room_size + c * WALL_THICK
-            for r in range(rooms_y):
-                y_room_start = r * (room_size + WALL_THICK)
-                possible_y = rng.integers(y_room_start, y_room_start + room_size - door_size + 1)
-                grid[possible_y : possible_y + door_size, x_wall : x_wall + WALL_THICK] = 0
-
-        for r in range(rooms_y - 1):
-            y_wall = (r + 1) * room_size + r * WALL_THICK
-            for c in range(rooms_x):
-                x_room_start = c * (room_size + WALL_THICK)
-                possible_x = rng.integers(x_room_start, x_room_start + room_size - door_size + 1)
-                grid[y_wall : y_wall + WALL_THICK, possible_x : possible_x + door_size] = 0
-
-        return '\n'.join(''.join('.' if cell == 0 else '#' for cell in row) for row in grid)
-
-def generate_and_save_room_maps(name_prefix, seed_range):
+def generate_and_save_room_maps(name_prefix, seed_range, settings_generator=None):
     test_maps = {}
     max_digits = len(str(max(seed_range)))
-    settings_generator = RoomRangeSettings()
+    settings_generator = settings_generator or RoomRangeSettings()
 
     for seed in seed_range:
         settings = settings_generator.sample(seed)
         map_data = RoomGenerator.generate(**settings)
         map_name = f"{name_prefix}-seed-{str(seed).zfill(max_digits)}"
         test_maps[map_name] = map_data
-    maps_dict_to_yaml(f'{name_prefix}.yaml', test_maps)
+
+    maps_dict_to_yaml(f"{name_prefix}.yaml", test_maps)
+
 
 def main():
     generate_and_save_room_maps("validation-room", range(0, 128))
     generate_and_save_room_maps("training-room", range(128, 128 + 512))
+
 
 if __name__ == "__main__":
     main()
