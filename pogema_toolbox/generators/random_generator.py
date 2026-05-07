@@ -2,7 +2,7 @@ import numpy as np
 
 from dataclasses import dataclass
 
-from pogema_toolbox.generators.generator_utils import maps_dict_to_yaml
+from .generator_utils import maps_dict_to_yaml
 
 
 @dataclass
@@ -20,14 +20,18 @@ class MapRangeSettings:
             "width": rng.integers(self.width_min, self.width_max + 1),
             "height": rng.integers(self.height_min, self.height_max + 1),
             "obstacle_density": rng.uniform(self.obstacle_density_min, self.obstacle_density_max),
-            "seed": seed
+            "seed": seed,
         }
 
 
 def generate_map(settings):
     rng = np.random.default_rng(settings["seed"])
-    width, height, obstacle_density = settings["width"], settings["height"], settings["obstacle_density"]
-    map_data = [['.' for _ in range(width)] for _ in range(height)]
+    width, height, obstacle_density = (
+        settings["width"],
+        settings["height"],
+        settings["obstacle_density"],
+    )
+    map_data = [["." for _ in range(width)] for _ in range(height)]
     total_tiles = width * height
     total_obstacles = int(total_tiles * obstacle_density)
 
@@ -35,11 +39,11 @@ def generate_map(settings):
     while obstacles_placed < total_obstacles:
         x = rng.integers(0, width)
         y = rng.integers(0, height)
-        if map_data[y][x] == '.':
-            map_data[y][x] = '#'
+        if map_data[y][x] == ".":
+            map_data[y][x] = "#"
             obstacles_placed += 1
 
-    return '\n'.join(''.join(row) for row in map_data)
+    return "\n".join("".join(row) for row in map_data)
 
 
 def generate_and_save_maps(name_prefix, seed_range):
@@ -53,13 +57,4 @@ def generate_and_save_maps(name_prefix, seed_range):
         map_name = f"{name_prefix}-seed-{str(seed).zfill(max_digits)}"
         test_maps[map_name] = map_data
 
-    maps_dict_to_yaml(f'{name_prefix}.yaml', test_maps)
-
-
-def main():
-    generate_and_save_maps("validation-random", range(0, 128))
-    generate_and_save_maps("training-random", range(128, 128 + 512))
-
-
-if __name__ == "__main__":
-    main()
+    maps_dict_to_yaml(f"{name_prefix}.yaml", test_maps)

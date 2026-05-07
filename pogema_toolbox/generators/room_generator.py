@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from pogema_toolbox.generators.generator_utils import maps_dict_to_yaml
+from .generator_utils import maps_dict_to_yaml
 
 
 @dataclass
@@ -38,7 +38,9 @@ class RoomRangeSettings:
             room_width = rng.integers(self.room_width_min, self.room_width_max + 1)
             num_cols = rng.integers(self.num_cols_min, self.num_cols_max + 1)
 
-        obstacle_density = rng.uniform(self.obstacle_density_min, self.obstacle_density_max)
+        obstacle_density = rng.uniform(
+            self.obstacle_density_min, self.obstacle_density_max
+        )
 
         return {
             "room_width": room_width,
@@ -60,12 +62,9 @@ def generate_room(
     only_centre_obstacles=False,
     seed=None,
 ):
+    # Reference implementation:
+    # https://github.com/romanohu/pogema-toolbox/blob/main/pogema_toolbox/generators/room_generator.py
     rng = np.random.default_rng(seed)
-
-    room = np.zeros(
-        (room_height * num_rows + num_rows - 1, room_width * num_cols + num_cols - 1),
-        dtype="int",
-    )
 
     if room_width <= 0 or room_height <= 0:
         raise ValueError("room_width and room_height must be positive integers")
@@ -74,17 +73,24 @@ def generate_room(
     if not 0.0 <= obstacle_density <= 1.0:
         raise ValueError("obstacle_density must be in [0.0, 1.0]")
 
+    room = np.zeros(
+        (room_height * num_rows + num_rows - 1, room_width * num_cols + num_cols - 1),
+        dtype="int",
+    )
     obstacle_mask = np.zeros_like(room, dtype=bool)
 
-    for r in range(num_rows):
-        row_start = r * (room_height + 1)
+    for row in range(num_rows):
+        row_start = row * (room_height + 1)
         row_end = row_start + room_height
-        for c in range(num_cols):
-            col_start = c * (room_width + 1)
+        for col in range(num_cols):
+            col_start = col * (room_width + 1)
             col_end = col_start + room_width
 
             if only_centre_obstacles and room_height >= 3 and room_width >= 3:
-                obstacle_mask[row_start + 1 : row_end - 1, col_start + 1 : col_end - 1] = True
+                obstacle_mask[
+                    row_start + 1 : row_end - 1,
+                    col_start + 1 : col_end - 1,
+                ] = True
             else:
                 obstacle_mask[row_start:row_end, col_start:col_end] = True
 
@@ -95,15 +101,13 @@ def generate_room(
     room[:, room_width:: room_width + 1] = 1
 
     row_doors = rng.integers(low=0, high=room_width, size=(num_rows - 1, num_cols))
-    offset = np.arange(num_cols) * (room_width + 1)
-    offset = np.expand_dims(offset, axis=0)
-    row_doors = offset + row_doors
+    col_offsets = np.expand_dims(np.arange(num_cols) * (room_width + 1), axis=0)
+    row_doors = col_offsets + row_doors
     np.put_along_axis(room[room_height:: room_height + 1, :], row_doors, 0, axis=1)
 
     col_doors = rng.integers(low=0, high=room_height, size=(num_rows, num_cols - 1))
-    offset = np.arange(num_rows) * (room_height + 1)
-    offset = np.expand_dims(offset, axis=1)
-    col_doors = offset + col_doors
+    row_offsets = np.expand_dims(np.arange(num_rows) * (room_height + 1), axis=1)
+    col_doors = row_offsets + col_doors
     np.put_along_axis(room[:, room_width:: room_width + 1], col_doors, 0, axis=0)
 
     return room

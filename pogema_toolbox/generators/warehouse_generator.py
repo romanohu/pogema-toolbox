@@ -3,7 +3,7 @@ from typing import Optional
 
 import numpy as np
 
-from pogema_toolbox.generators.generator_utils import maps_dict_to_yaml
+from .generator_utils import maps_dict_to_yaml
 
 
 @dataclass
@@ -20,6 +20,7 @@ class WarehouseRangeSettings:
     side_pad: int = 1
     side_pad_min: Optional[int] = None
     side_pad_max: Optional[int] = None
+
     horizontal_gap: int = 1
     horizontal_gap_min: Optional[int] = None
     horizontal_gap_max: Optional[int] = None
@@ -58,8 +59,12 @@ class WarehouseRangeSettings:
             vertical_gap = rng.integers(self.vertical_gap_min, self.vertical_gap_max + 1)
 
         if self.num_wall_rows_min is not None:
-            num_wall_rows = rng.integers(self.num_wall_rows_min, self.num_wall_rows_max + 1)
-            num_wall_cols = rng.integers(self.num_wall_cols_min, self.num_wall_cols_max + 1)
+            num_wall_rows = rng.integers(
+                self.num_wall_rows_min, self.num_wall_rows_max + 1
+            )
+            num_wall_cols = rng.integers(
+                self.num_wall_cols_min, self.num_wall_cols_max + 1
+            )
 
             height = vertical_gap * (num_wall_rows + 1) + wall_height * num_wall_rows
             width = (
@@ -91,7 +96,7 @@ class WarehouseRangeSettings:
         }
 
 
-def generate_warehouse(
+def _generate_warehouse_array(
     width,
     height,
     num_wall_rows,
@@ -105,11 +110,15 @@ def generate_warehouse(
     block_extra_space=False,
     seed=None,
 ):
+    # Reference implementation:
+    # https://github.com/romanohu/pogema-toolbox/blob/main/pogema_toolbox/generators/warehouse_generator.py
     grid = np.zeros((height, width), dtype=int)
 
     if not block_extra_space:
         max_wall_rows = (height - vertical_gap) // (wall_height + vertical_gap)
-        max_wall_cols = (width - side_pad * 2 + horizontal_gap) // (wall_width + horizontal_gap)
+        max_wall_cols = (width - side_pad * 2 + horizontal_gap) // (
+            wall_width + horizontal_gap
+        )
 
         max_wall_rows = max(0, max_wall_rows)
         max_wall_cols = max(0, max_wall_cols)
@@ -132,7 +141,10 @@ def generate_warehouse(
         row_start = offset_y + vertical_gap * (row + 1) + wall_height * row
         for col in range(cols_to_place):
             col_start = offset_x + side_pad + col * (wall_width + horizontal_gap)
-            grid[row_start:row_start + wall_height, col_start:col_start + wall_width] = 1
+            grid[
+                row_start : row_start + wall_height,
+                col_start : col_start + wall_width,
+            ] = 1
 
     if block_extra_space:
         blocked_grid = np.ones_like(grid)
@@ -144,6 +156,17 @@ def generate_warehouse(
     return grid
 
 
+def generate_warehouse(**kwargs):
+    grid = _generate_warehouse_array(**kwargs)
+    return "\n".join("".join("." if cell == 0 else "#" for cell in row) for row in grid)
+
+
+class WarehouseGenerator:
+    @staticmethod
+    def generate(**kwargs):
+        return generate_warehouse(**kwargs)
+
+
 def generate_and_save_warehouses(name_prefix, seed_range, settings_generator=None):
     test_maps = {}
     max_digits = len(str(max(seed_range)))
@@ -153,9 +176,7 @@ def generate_and_save_warehouses(name_prefix, seed_range, settings_generator=Non
         settings = settings_generator.sample(seed)
         map_data = generate_warehouse(**settings)
         map_name = f"{name_prefix}-seed-{str(seed).zfill(max_digits)}"
-        test_maps[map_name] = "\n".join(
-            "".join("." if cell == 0 else "#" for cell in row) for row in map_data
-        )
+        test_maps[map_name] = map_data
 
     maps_dict_to_yaml(f"{name_prefix}.yaml", test_maps)
 
