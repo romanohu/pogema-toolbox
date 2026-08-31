@@ -158,6 +158,38 @@ def test_invalid_generator_arguments_fail_before_rollout(kwargs, message):
         cities_generator.CitiesTilesGenerator(**kwargs).generate()
 
 
+def test_single_rejects_an_oversized_candidate_before_rng_use(monkeypatch):
+    from pogema_toolbox.generators import cities_generator
+
+    def rng_must_not_run(seed):
+        raise AssertionError("RNG was used before capacity validation")
+
+    monkeypatch.setattr(cities_generator.np.random, "default_rng", rng_must_not_run)
+
+    with pytest.raises(ValueError, match="only"):
+        cities_generator.CitiesTilesGenerator.single(
+            map_name="Berlin_1_256_00",
+            num_agents=(1_000_000,),
+            num_samples=1,
+        ).generate()
+
+
+def test_random_rejects_candidates_that_do_not_fit_every_map_before_rng_use(
+    monkeypatch,
+):
+    from pogema_toolbox.generators import cities_generator
+
+    def rng_must_not_run(seed):
+        raise AssertionError("RNG was used before capacity validation")
+
+    monkeypatch.setattr(cities_generator.np.random, "default_rng", rng_must_not_run)
+
+    with pytest.raises(ValueError, match="only"):
+        cities_generator.CitiesTilesGenerator.random(
+            num_agents=(2032,), num_samples=1
+        ).generate()
+
+
 def test_generated_grid_config_resets_a_real_environment():
     from pogema_toolbox.generators import cities_generator
 

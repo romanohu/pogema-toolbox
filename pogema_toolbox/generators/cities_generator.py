@@ -186,3 +186,15 @@ class CitiesTilesGenerator:
             raise ValueError(f"single mode requires a known map_name: {self.map_name!r}")
         if self.mode == "random" and self.map_name is not None:
             raise ValueError("random mode does not accept map_name")
+        names = (self.map_name,) if self.mode == "single" else MAP_NAMES
+        self._validate_capacities(maps, names)
+
+    def _validate_capacities(self, maps: dict[str, str], map_names) -> None:
+        for map_name in map_names:
+            free_cells = sum(symbol == "." for symbol in maps[map_name])
+            for num_agents in self.num_agents:
+                if free_cells < num_agents:
+                    raise ValueError(
+                        f"mode={self.mode} map_name={map_name} "
+                        f"num_agents={num_agents}: only {free_cells} free cells"
+                    )
