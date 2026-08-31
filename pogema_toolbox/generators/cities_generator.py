@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from importlib.resources import files
+from importlib.resources import path
 
 import yaml
 
@@ -20,8 +20,8 @@ ASSET_SHA256 = "3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f
 
 
 def load_cities_tiles() -> dict[str, str]:
-    asset = files("pogema_toolbox").joinpath("maps/cities-tiles.yaml")
-    raw = asset.read_bytes()
+    with path("pogema_toolbox.maps", "cities-tiles.yaml") as asset:
+        raw = asset.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
     if digest != ASSET_SHA256:
         raise ValueError(f"cities-tiles asset hash mismatch: {digest}")

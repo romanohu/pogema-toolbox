@@ -27,6 +27,28 @@ def _instance_fingerprint(observations) -> str:
     ).hexdigest()
 
 
+def test_cities_generator_imports_without_importlib_resources_files():
+    import importlib
+    import importlib.resources
+    import sys
+
+    resources_module = importlib.resources
+    files = getattr(resources_module, "files", None)
+    sys.modules.pop("pogema_toolbox.generators.cities_generator", None)
+    if files is None:
+        module = importlib.import_module("pogema_toolbox.generators.cities_generator")
+    else:
+        del resources_module.files
+        try:
+            module = importlib.import_module(
+                "pogema_toolbox.generators.cities_generator"
+            )
+        finally:
+            resources_module.files = files
+
+    assert module.CITY_NAMES[0] == "Berlin_1_256"
+
+
 def test_cities_tiles_asset_matches_the_public_benchmark():
     from pogema_toolbox.generators.cities_generator import (
         CITY_NAMES,
