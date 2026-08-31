@@ -64,6 +64,33 @@ custom_map = """
 ToolboxRegistry.register_maps({"custom_map": custom_map})
 ```
 
+### Cities tiles
+
+The fixed cities-tile maps are from
+[Cognitive-AI-Systems/MAPF-GPT-DDG](https://github.com/Cognitive-AI-Systems/MAPF-GPT-DDG)
+commit `842384ee18902b8e7c880c3f90c5fc8098520522`, asset path
+`eval_configs/04-movingai/maps.yaml`. The packaged asset SHA-256 is
+`3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f`.
+The upstream asset is licensed under the MIT License, with the notice
+`Copyright (c) 2025 Alexey Skrynnik`.
+
+```python
+from pogema_toolbox.generators.cities_generator import CitiesTilesGenerator
+
+CitiesTilesGenerator.official().generate()
+CitiesTilesGenerator.single(
+    map_name="Berlin_1_256_00",
+    num_agents=(64, 128),
+    num_samples=100,
+    seed=42,
+).generate()
+CitiesTilesGenerator.random(
+    num_agents=(64, 128, 192, 256),
+    num_samples=1000,
+    seed=42,
+).generate()
+```
+
 ### Evaluation script
 
 Example of the POGEMA Toolbox configuration for parallel testing of the RHCR approach and visualization of its results.
