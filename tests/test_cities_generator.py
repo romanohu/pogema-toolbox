@@ -82,6 +82,18 @@ def test_cities_tiles_asset_matches_the_public_benchmark():
     )
 
 
+def test_cities_tiles_asset_license_is_packaged():
+    from importlib.resources import path
+
+    with path(
+        "pogema_toolbox.licenses", "MAPF-GPT-DDG-LICENSE"
+    ) as license_path:
+        text = license_path.read_text(encoding="utf-8")
+
+    assert text.startswith("MIT License\n\nCopyright (c) 2025 Alexey Skrynnik\n")
+    assert "Permission is hereby granted, free of charge" in text
+
+
 def _key(instance):
     return instance.map_name, instance.num_agents, instance.scenario_seed
 
@@ -166,12 +178,43 @@ def test_single_rejects_an_oversized_candidate_before_rng_use(monkeypatch):
 
     monkeypatch.setattr(cities_generator.np.random, "default_rng", rng_must_not_run)
 
-    with pytest.raises(ValueError, match="only"):
+    with pytest.raises(ValueError, match="capacity"):
         cities_generator.CitiesTilesGenerator.single(
             map_name="Berlin_1_256_00",
             num_agents=(1_000_000,),
             num_samples=1,
         ).generate()
+
+
+def test_single_rejects_above_connected_component_capacity_before_rng_use(
+    monkeypatch,
+):
+    from pogema_toolbox.generators import cities_generator
+
+    def rng_must_not_run(seed):
+        raise AssertionError("RNG was used before capacity validation")
+
+    monkeypatch.setattr(cities_generator.np.random, "default_rng", rng_must_not_run)
+
+    with pytest.raises(ValueError, match="capacity 1009"):
+        cities_generator.CitiesTilesGenerator.single(
+            map_name="NewYork_1_256_02",
+            num_agents=(1010,),
+            num_samples=1,
+        ).generate()
+
+
+def test_single_accepts_connected_component_capacity_boundary():
+    from pogema_toolbox.generators import cities_generator
+
+    instance = cities_generator.CitiesTilesGenerator.single(
+        map_name="NewYork_1_256_02",
+        num_agents=(1009,),
+        num_samples=1,
+    ).generate()[0]
+
+    observations, _ = pogema_v0(grid_config=instance.grid_config).reset()
+    assert len(observations) == 1009
 
 
 def test_random_rejects_candidates_that_do_not_fit_every_map_before_rng_use(
@@ -184,9 +227,29 @@ def test_random_rejects_candidates_that_do_not_fit_every_map_before_rng_use(
 
     monkeypatch.setattr(cities_generator.np.random, "default_rng", rng_must_not_run)
 
-    with pytest.raises(ValueError, match="only"):
+    with pytest.raises(ValueError, match="capacity"):
         cities_generator.CitiesTilesGenerator.random(
             num_agents=(2032,), num_samples=1
+        ).generate()
+
+
+def test_negative_seed_is_rejected_before_rng_use(monkeypatch):
+    from pogema_toolbox.generators import cities_generator
+
+    def rng_must_not_run(seed):
+        raise AssertionError("RNG was used before seed validation")
+
+    monkeypatch.setattr(cities_generator.np.random, "default_rng", rng_must_not_run)
+
+    with pytest.raises(
+        ValueError,
+        match=r"mode=single seed=-1: seed must be a non-negative integer",
+    ):
+        cities_generator.CitiesTilesGenerator.single(
+            map_name="Berlin_1_256_00",
+            num_agents=(64,),
+            num_samples=1,
+            seed=-1,
         ).generate()
 
 
@@ -201,13 +264,17 @@ def test_generated_grid_config_resets_a_real_environment():
     ).generate()[0]
     env = pogema_v0(grid_config=instance.grid_config)
     observations, _ = env.reset()
-    starts = [tuple(item["global_xy"]) for item in observations]
-    goals = [tuple(item["global_target_xy"]) for item in observations]
-    rows = instance.grid_config.map.splitlines()
+    grid = env.unwrapped.grid
+    starts = [tuple(item) for item in grid.get_agents_xy(ignore_borders=True)]
+    goals = [tuple(item) for item in grid.get_targets_xy(ignore_borders=True)]
+    obstacles = grid.get_obstacles(ignore_borders=True)
+    assert type(instance.grid_config.map) is list
+    assert len(instance.grid_config.map) == 64
+    assert all(len(row) == 64 for row in instance.grid_config.map)
     assert len(starts) == len(set(starts)) == 64
     assert len(goals) == len(set(goals)) == 64
-    assert all(rows[row][col] == "." for row, col in starts)
-    assert all(rows[row][col] == "." for row, col in goals)
+    assert all(obstacles[row, col] == instance.grid_config.FREE for row, col in starts)
+    assert all(obstacles[row, col] == instance.grid_config.FREE for row, col in goals)
 
 
 @pytest.mark.parametrize(

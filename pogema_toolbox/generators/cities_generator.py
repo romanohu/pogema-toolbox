@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib.resources import path
 
 import numpy as np
@@ -23,6 +24,41 @@ MAP_NAMES = tuple(f"{city}_{tile:02d}" for city in CITY_NAMES for tile in range(
 ASSET_SHA256 = "3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f"
 OFFICIAL_AGENT_COUNTS = (64, 128, 192, 256)
 MAX_EPISODE_STEPS = 256
+
+
+@lru_cache(maxsize=None)
+def _placement_capacity(grid: str) -> int:
+    rows = grid.splitlines()
+    seen = set()
+    capacity = 0
+    for row_index, row in enumerate(rows):
+        for column_index, symbol in enumerate(row):
+            start = (row_index, column_index)
+            if symbol != "." or start in seen:
+                continue
+            seen.add(start)
+            stack = [start]
+            component_size = 0
+            while stack:
+                current_row, current_column = stack.pop()
+                component_size += 1
+                for next_row, next_column in (
+                    (current_row - 1, current_column),
+                    (current_row + 1, current_column),
+                    (current_row, current_column - 1),
+                    (current_row, current_column + 1),
+                ):
+                    next_cell = (next_row, next_column)
+                    if (
+                        0 <= next_row < len(rows)
+                        and 0 <= next_column < len(rows[next_row])
+                        and rows[next_row][next_column] == "."
+                        and next_cell not in seen
+                    ):
+                        seen.add(next_cell)
+                        stack.append(next_cell)
+            capacity += component_size // 2
+    return capacity
 
 
 def load_cities_tiles() -> dict[str, str]:
@@ -52,22 +88,6 @@ class CitiesTilesInstance:
     map_name: str
     num_agents: int
     scenario_seed: int
-
-
-class _GridMap(list):
-    def __init__(self, numeric_map, source: str, obs_radius: int):
-        super().__init__(numeric_map)
-        rows = source.splitlines()
-        border = "#" * (len(rows[0]) + 2 * obs_radius)
-        side = "#" * obs_radius
-        self._rows = (
-            [border] * obs_radius
-            + [f"{side}{row}{side}" for row in rows]
-            + [border] * obs_radius
-        )
-
-    def splitlines(self):
-        return self._rows
 
 
 class CitiesTilesGenerator:
@@ -127,11 +147,11 @@ class CitiesTilesGenerator:
 
     def _instance(self, maps, map_name, num_agents, scenario_seed):
         city, tile = map_name.rsplit("_", 1)
-        free_cells = sum(symbol == "." for symbol in maps[map_name])
-        if free_cells < num_agents:
+        capacity = _placement_capacity(maps[map_name])
+        if capacity < num_agents:
             raise ValueError(
                 f"mode={self.mode} map_name={map_name} num_agents={num_agents} "
-                f"scenario_seed={scenario_seed}: only {free_cells} free cells"
+                f"scenario_seed={scenario_seed}: placement capacity {capacity}"
             )
         config = GridConfig(
             map=maps[map_name],
@@ -143,7 +163,6 @@ class CitiesTilesGenerator:
             collision_system="soft",
             on_target="nothing",
         )
-        config.map = _GridMap(config.map, maps[map_name], config.obs_radius)
         return CitiesTilesInstance(
             grid_config=config,
             city=city,
@@ -156,8 +175,15 @@ class CitiesTilesGenerator:
     def _validate(self, maps: dict[str, str]) -> None:
         if self.mode not in {"official", "single", "random"}:
             raise ValueError(f"unsupported cities-tiles mode: {self.mode!r}")
-        if isinstance(self.seed, bool) or not isinstance(self.seed, int):
-            raise ValueError("seed must be an integer")
+        if (
+            isinstance(self.seed, bool)
+            or not isinstance(self.seed, int)
+            or self.seed < 0
+        ):
+            raise ValueError(
+                f"mode={self.mode} seed={self.seed!r}: "
+                "seed must be a non-negative integer"
+            )
         valid_agents = bool(self.num_agents) and all(
             not isinstance(value, bool)
             and isinstance(value, (int, np.integer))
@@ -175,6 +201,7 @@ class CitiesTilesGenerator:
                 raise ValueError("official mode requires seed=0")
             if self.num_agents != OFFICIAL_AGENT_COUNTS:
                 raise ValueError("official mode requires the official num_agents")
+            self._validate_capacities(maps, MAP_NAMES)
             return
         if (
             isinstance(self.num_samples, bool)
@@ -191,10 +218,10 @@ class CitiesTilesGenerator:
 
     def _validate_capacities(self, maps: dict[str, str], map_names) -> None:
         for map_name in map_names:
-            free_cells = sum(symbol == "." for symbol in maps[map_name])
+            capacity = _placement_capacity(maps[map_name])
             for num_agents in self.num_agents:
-                if free_cells < num_agents:
+                if capacity < num_agents:
                     raise ValueError(
                         f"mode={self.mode} map_name={map_name} "
-                        f"num_agents={num_agents}: only {free_cells} free cells"
+                        f"num_agents={num_agents}: placement capacity {capacity}"
                     )

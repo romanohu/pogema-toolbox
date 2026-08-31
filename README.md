@@ -72,7 +72,9 @@ commit `842384ee18902b8e7c880c3f90c5fc8098520522`, asset path
 `eval_configs/04-movingai/maps.yaml`. The packaged asset SHA-256 is
 `3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f`.
 The upstream asset is licensed under the MIT License, with the notice
-`Copyright (c) 2025 Alexey Skrynnik`.
+`Copyright (c) 2025 Alexey Skrynnik`; the exact license from that revision is
+packaged in
+[`pogema_toolbox/licenses/MAPF-GPT-DDG-LICENSE`](pogema_toolbox/licenses/MAPF-GPT-DDG-LICENSE).
 
 ```python
 from pogema_toolbox.generators.cities_generator import CitiesTilesGenerator
@@ -90,6 +92,20 @@ CitiesTilesGenerator.random(
     seed=42,
 ).generate()
 ```
+
+`official` returns exactly 512 instances in map-major order: the 128 map names
+in `CITY_NAMES`/tile-index order, each followed by agent counts 64, 128, 192,
+and 256. Every official scenario uses seed 0. The fixed environment constants
+are a 256-step limit, observation radius 5, `MAPF` observations, soft
+collisions, and `on_target="nothing"`.
+
+`single` fixes `map_name`; `random` selects each map uniformly from all 128
+maps. Both modes independently select an entry uniformly from `num_agents` and
+draw a non-negative 32-bit scenario seed for every sample. Sampling is with
+replacement, so repeated map, agent-count, or complete scenario selections are
+allowed, and the supplied generator `seed` makes their ordered sequence
+reproducible. Every returned `CitiesTilesInstance` contains `grid_config`,
+`city`, `tile_index`, `map_name`, `num_agents`, and `scenario_seed` metadata.
 
 ### Evaluation script
 

@@ -63,6 +63,6 @@ setup(
     include_package_data=True,
     python_requires='>=3.8',
     package_data={
-        'pogema_toolbox': ['maps/*.yaml'],
+        'pogema_toolbox': ['licenses/*', 'maps/*.yaml'],
     },
 )
