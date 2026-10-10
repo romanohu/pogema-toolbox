@@ -1,10 +1,22 @@
 """Deterministic, explicit scenarios on binary grids."""
 
 import sys
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
 from numbers import Integral
 
 import numpy as np
 from pogema import GridConfig
+
+
+@dataclass
+class TaskLayout:
+    """A generated map with named (row, column) endpoints and its map seed."""
+
+    obstacles: np.ndarray
+    pickup_cells: List[Tuple[int, int]]
+    delivery_cells: List[Tuple[int, int]]
+    map_seed: Optional[int]
 
 
 def _integer(value, name, minimum=0):
