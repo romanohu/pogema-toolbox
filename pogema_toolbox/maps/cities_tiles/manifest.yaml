@@ -1,0 +1,13 @@
+schema_version: 1
+dataset: cities_tiles
+asset: pogema_toolbox.maps/cities-tiles.yaml
+asset_sha256: 3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f
+source_url: https://github.com/Cognitive-AI-Systems/MAPF-GPT-DDG
+source_asset: eval_configs/04-movingai/maps.yaml
+source_revision: 842384ee18902b8e7c880c3f90c5fc8098520522
+attribution: Cities Tiles from MAPF-GPT-DDG, derived from MovingAI city maps.
+rights:
+  attribution_notice: cities_tiles/notices/ATTRIBUTION.md
+  ddg_notice: cities_tiles/notices/DDG-LICENSE.txt
+  movingai_notice: movingai/notices/ATTRIBUTION.md
+  note: DDG MIT applies to its released asset; inherited source map rights remain separate.

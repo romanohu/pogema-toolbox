@@ -64,6 +64,12 @@ custom_map = """
 ToolboxRegistry.register_maps({"custom_map": custom_map})
 ```
 
+### Dataset preparation
+
+See [pinned dataset preparation](docs/datasets.md) to prepare MovingAI data or
+verify explicit local QD-MAPPER inputs using toolbox alone. Raw dataset files
+remain external artifacts; parsing and generation never acquire missing data.
+
 ### Explicit map scenarios
 
 See [scenario parsing and sampling](docs/scenarios.md) for local MovingAI
