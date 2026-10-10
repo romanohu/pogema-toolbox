@@ -64,6 +64,11 @@ custom_map = """
 ToolboxRegistry.register_maps({"custom_map": custom_map})
 ```
 
+### Explicit map scenarios
+
+See [scenario parsing and sampling](docs/scenarios.md) for local MovingAI
+map/scenario parsing and deterministic explicit uniform or endpoint scenarios.
+
 ### Cities tiles
 
 The fixed cities-tile maps are from
