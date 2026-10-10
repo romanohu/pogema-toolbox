@@ -47,7 +47,7 @@ class ForbidNeural(importlib.abc.MetaPathFinder):
             raise AssertionError('standalone preparation imported ' + fullname)
 sys.meta_path.insert(0, ForbidNeural())
 import pogema_toolbox.datasets as datasets
-assert Path(datasets.__file__).is_relative_to(Path(sys.argv[1]))
+assert Path(sys.argv[1]).resolve() in Path(datasets.__file__).resolve().parents
 for dataset in ('movingai', 'cities_tiles', 'qd_mapper'):
     assert datasets.dataset_manifest(dataset)['dataset'] == dataset
 assert datasets.prepare_maps('cities_tiles')['map_count'] == 128
