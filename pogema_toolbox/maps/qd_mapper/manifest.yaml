@@ -1,0 +1,157 @@
+schema_version: 1
+dataset: qd_mapper
+source_url: https://airtclick.github.io/qdmapper/
+attribution: QD-MAPPER released map collections (CBS, EECBS, PBS, PBS_EECBS, LTF,
+  PIBT, PIBT_LTF).
+rights:
+  status: permission_unverified
+  notice: qd_mapper/notices/RIGHTS.md
+archives:
+- name: CBS
+  url: https://airtclick.github.io/qdmapper/CBS.zip
+  sha256: fa60cbfe2dc019872c3e4a79afa3408586e0fbbaeb728dba834ff8b0abc5c082
+  bytes: 36789
+  members:
+    CBS/0_30.json: a3ad3c174d6306dcd15fd751d5d0d3b091f747eff3bb2c5178d909ec2c59bddc
+    CBS/0_38.json: cb8dd7ec1d3217de0325184caf3f1cb6fe96ae6c85a4165428169f7a770257fe
+    CBS/0_68.json: 3cb3b54798e1cc0d8a25d755c106cbafdd67d4a14fcb691dbe77d18df04a7a9e
+    CBS/0_79.json: 3b505d2f057f604b7cb5c5f8f09b697c2e1341347e0237b4ff2827ee92c7dead
+    CBS/38_79.json: 5cd4cd46c0a753d88ab3b42fd5c95170ce1f427df067124041eae719292115ba
+    CBS/45_27.json: 7f41afa920086c45d6a657ac15b3e0d65abd5f91665c6daa9ad0035612942b3c
+    CBS/5_61.json: c772234b821a18576d951a6caf232ffa0979c028fdb760ffbd7d345331992ec9
+    CBS/5_69.json: efd00dce1a06226206ebbde1e93439c5291592fa131acc36f8a3a223e80175e2
+  filename: CBS.zip
+  ignored_members:
+    CBS/0_30.png: 85d9a8a9f32ef16710a7980c9784d3c1431b89e6e40687de15c21d5d3138b237
+    CBS/0_38.png: 3ed5be80321f52de3a2dadbc83365d76c44dd1c84f032d25c2e63d3784a84654
+    CBS/0_68-0.png: 953a1d7355778850f0e07017ca9a04a088b013adcfeda6d6e8ca5df3e10d2689
+    CBS/0_79-0.png: 0116c0f16812f9014d8dbd7465523ee06efea100c9af91020e5a0666f565b86d
+    CBS/38_79-0.png: 2dd7de92d3376a95a88b642ffcbc94831d612e88dab5ad15441e24e0b3c8f036
+    CBS/45_27-0.png: 79113637b537c156b8f55c16462073a6a1e7013cc6d1c819159384de0966ab07
+    CBS/5_61.png: 087e40c5f750561d7294d69017e9bcd59a7cfcab7b178211082c8e744c60ed01
+    CBS/5_69.png: 0b44beb4145751e03977d998cb455e4873ab955fac3d61c762ed1c29370aeb2b
+- name: EECBS
+  url: https://airtclick.github.io/qdmapper/EECBS.zip
+  sha256: 024741a182adcbdadc73c29fde8f1d6db6c55dc4a92dcc5079f254a0474c603e
+  bytes: 40034
+  members:
+    EECBS/0_24.json: 699db21dc12ca88b8832b90642b1282629fd5a80bf487161add042dbcc57e448
+    EECBS/17_78.json: 66a2beee2c7d5f784e40633ba7284dbb680190e799e3b42baaa1682c436de8f0
+    EECBS/30_79.json: ba7cb9211cfd72f2c2a968082d6d4a829b65cee468d5659a056bbc8fb1924a5b
+    EECBS/38_79.json: 98e1874aec590b6d6b877e3a0a3b1ac33ed68f0a9340108b407bb3f39eaadfa0
+    EECBS/39_73.json: 23dc8a4ec327aab8a9139e21b840d48bc067fee69bcf8d5ee3a27cc690014db7
+    EECBS/4_36.json: f89b82bf4068a4d14b96d380942bf661486db16f320ee43ce2d1c210f022c49f
+    EECBS/4_57.json: 9b1f312d936c448e7f7b52dd77f258ed918eecb69928288c8e05b9eb48305365
+    EECBS/54_79.json: 6a84907fca94c41701784883f944070886e3b2965016f4bd3a2526a10f0d390f
+  filename: EECBS.zip
+  ignored_members:
+    EECBS/0_24-0.png: 6d9512c39144eab5d12e4fe006c804cc85540ab029f35dd8a178cd6ac311200a
+    EECBS/17_78-0.png: 9bcaea2682c04cdeb88349b99be53a4aad6308d96ca20cde09396118c90f3348
+    EECBS/30_79.png: 4afbd00a92f6765cdf3c788be53831ce129c979dc64d7429e53136b3acbb0c5a
+    EECBS/38_79.png: eeb903d548a8ab19a33922079e696c46a1447241d08c7b6181068a1a7a9776d9
+    EECBS/39_73-0.png: bcdb9bd8f601bd5dbb4e6bfb64bf1fb68d07200378b79e407f3760e4bedd2c50
+    EECBS/4_36-0.png: d93658d0948957d1d03e97149c6b69db9a14e254e930213678eac938c148bbba
+    EECBS/4_57.png: 72cffa667fbe532ab43a60f2ec9a2f697ebdac49717aa5d3eefe344dbc7bfa45
+    EECBS/54_79.png: 3fdc90e8544694d30763a8ff50ebedee8944183cc77c49d4d4282abf8fe1873d
+- name: PBS
+  url: https://airtclick.github.io/qdmapper/PBS.zip
+  sha256: 1e57ba13c9b331bf521990b04ab343a27f88f9bcb48ad82a4213e5de6cdddf46
+  bytes: 41701
+  members:
+    PBS/16_75.json: a6204042a23079b59e2aed0360a6e190f4f060906584b76c54e9b33060e08fbe
+    PBS/18_50.json: 377a665d2163e152a56a2db2c950efb40f8745f4082e5776f1b3917c1103f85c
+    PBS/23_78.json: 133a72e353db58f6ed5256f1872bf652593ff2c12ae50d2da604aef99956869d
+    PBS/24_38.json: 06bb0992e04da396f65931d6b01b292f59064602c6136a9ac23adc36e38a0f75
+    PBS/35_53.json: c3bc06dfd65c2c1b6cde2176f751b51cfd51fba9eef50ba3c599b4299d53b219
+    PBS/37_79.json: f76fc4247283c72add1475c67951fef94dbd0a9c6c5998dd6c56dd209f6c7061
+    PBS/50_79.json: 89f2e89bb769a85465a6404990d8a237c6481056a572961865aed3d6c4b2f4d4
+    PBS/7_79.json: e3ff2d6f4ca4dc55da25265338a7eb3f9e1e46740136c355ae23f48abcd238d9
+  filename: PBS.zip
+  ignored_members:
+    PBS/16_75.png: 9392f5cfce00b2de2427675c4213b5bcda00b066bcbd062830318a8fb89c1924
+    PBS/18_50-0.png: f38358c6edc23ca53617e21a6d1714241031f29635dbe7146b364ba8c67b37ca
+    PBS/23_78.png: 8d8231e94a2ef7ebd8784c84e0f28988940b7b8ead79102d2e5b7c6ce6bb405e
+    PBS/24_38-0.png: 9ba42ccab02b35b4957c9e4b74f32c4f53535f459949ab81598069e78f277fda
+    PBS/35_53-0.png: 09c262aecc66674ad1cbb673a7401f7f7c6ed0fa07a77730afd79521f1c89010
+    PBS/37_79.png: 6b797c1945a6714ff65ca242251d46e2c8e36ee85d0ff41b843b6d7536e1a3ec
+    PBS/50_79.png: ee0f1c2cc63b66eba479b2e0c80f4834629ba16a4ce5b226cbb2ae91a199ffbb
+    PBS/7_79-0.png: 64b824a00d405cdaca2a55ef18fef16cdbdab247d70ccd157ce5133a7e4f73b2
+- name: PBS_EECBS
+  url: https://airtclick.github.io/qdmapper/PBS_EECBS.zip
+  sha256: 3df4bdfe54ae95b8767d64ef488b1b47ba267a61ecd5b379bc971f2decffdeb8
+  bytes: 18823
+  members:
+    PBS_EECBS/0_79.json: 7cc207f99d5b357ecedb04a25d1194e1555b41fc540ef0f326a240565a6a9749
+    PBS_EECBS/34_44.json: a090f7b24c67558211cd368567b810c0f8f250406ea2159b7843851eeecf3ca3
+    PBS_EECBS/6_30.json: 2b1669cacb460d542e4aa1386cd96cc594a36ea3b0f85c5324a2998766635247
+    PBS_EECBS/6_32.json: d5b1b258655ef98020aacc1cafde7af8eb00f15a9251b8ef1d72f5e44fd37dae
+  filename: PBS_EECBS.zip
+  ignored_members:
+    PBS_EECBS/0_79-0.png: 21b5e706457018a9a3ecaa98daff674c95da8ec9f2e24026167ed09e8af722b6
+    PBS_EECBS/34_44-0.png: 48682fb4eb942dcf3eab6fe5079f48232bd01209f2839ed15491ae4a581989ba
+    PBS_EECBS/6_30-0.png: af012ec3f7777afd3c5c70029c7f4cf159b2fddc3e81833120a49707e0bb9f05
+    PBS_EECBS/6_32-0.png: a305d56d0336b46f7a5b5bf41b5dd4e656cd0647a7f8b907a9c5867d6a10c6b0
+- name: LTF
+  url: https://airtclick.github.io/qdmapper/LTF.zip
+  sha256: 4ff9a9ef449a19c0d855156a33fbc393b8a7aeae90393e594df00d0e5eef37bf
+  bytes: 59669
+  members:
+    LTF/0_52.json: 3ed00cc0e03edeec64b55eed12716c082c1c8be62e0905df8c0934536abf0d68
+    LTF/1_48.json: fb8a3c375ebe58fb193af1d273086b7a6ae9b9a8340b76f87d7d035a65ae0f8c
+    LTF/36_29.json: 655896af1907f4336f35bef1bc50dc0b3714ae01176c014c8deb49e6f095da29
+    LTF/42_24.json: 1cadfc2dc5637e15d1a7a8ddaff85de3283c4947fd6f1c1ae7b5161ede103986
+    LTF/42_25.json: 6368bbe15dfc9d3ea3f33a1545202cdede1c1fb1c28f0e65269886d31431a4d3
+    LTF/46_33.json: a30c97bd8b62ec8ad6a90dbdc7b528d47f5ab8dd01566223bfc4d5e3deba5ff1
+    LTF/46_44.json: 1b34ff697a9fc739f2e89e9af8accbdcd813ee12ff8b922ab7dbff0f60c590fa
+    LTF/75_72.json: e068d41ba2d5bad7accff97c1bb07825f5207bc35d2276fd54c160b9b2e45d99
+  filename: LTF.zip
+  ignored_members:
+    LTF/0_52-0.png: e3699a1fbf2182a24a4844cc660568470420f31fbc4d717dbf5da755335bfb4f
+    LTF/1_48.png: 974d7658ef53549e76858d35369f0eb59d8177d35124e81f633048e507815af1
+    LTF/36_29-0.png: bd3833c072d2fdac2f3864975cfefd7501db4e4551d3123af5c0d6bc807bd903
+    LTF/42_24-0.png: 2246ad03cfec13fc4921b1837166e080abe125cbacf97e6c8c6b928e9637f97a
+    LTF/42_25.png: 8251bf378f8116800647309ae17a06d60499261d30fac4699d90dfd4a25ba187
+    LTF/46_33.png: aa51cd0741c1ee604f1e1828483650e54c33faef58d1b019961b1a9e66fb84f4
+    LTF/46_44.png: 24858cf70eff69173772e15bcaa5d6a8a19b886fede0f63de67a9bfd4526ebbd
+    LTF/75_72-0.png: 41425864a1eedd504851a0b4a1fbfebcd3938306fcdfe30fe3e63a34310d88ee
+    LTF/desktop.ini: a39d1710d477ad59e76b526e140d1cef284a4757568b04af2b8694320538841b
+- name: PIBT
+  url: https://airtclick.github.io/qdmapper/PIBT.zip
+  sha256: 49e3013e585cd880805d3662ef1219e4ac3b230038c47b8798a5c49b184dd5a8
+  bytes: 57651
+  members:
+    PIBT/3_12.json: 85852e7ca434fc8c6b7ca56f0a44c00613537ed4f0ce3fafb32e6bc47084bd21
+    PIBT/3_33.json: 905193291286e30530762a2f7517b599f01a61188920fdba8faa4ed7f2b78a6a
+    PIBT/3_44.json: 2d30bdeed4d5a9612b07b5bcb2be301a23fcd7ab21aeeebadb83d20e5807db47
+    PIBT/44_32.json: 4f1cac40b613f2528f0b0e1eefc4884f4b302103f4d51ce8fbae4d53ac92f85a
+    PIBT/46_28.json: d7871a150b825f35a18e46372dcc82a6f25afa79abc2040ad6145b5d5171ef82
+    PIBT/72_23.json: 74c724a11fe6241e1ae3a4cd97fa4d4e145919f45b6fb885556e0b01a173b17b
+    PIBT/72_63.json: 9ca49e958cf77a20ccf5763bb4f05c6b05db7ff00e4282b12384c485974c8393
+    PIBT/74_66.json: 8067bf062b5fe48e02fd9d9e48e2c05127adf286cee57ffbced554b46ec031e1
+  filename: PIBT.zip
+  ignored_members:
+    PIBT/3_12.png: fb8efa4d71358d43374731e5c13e900d2b33f591bc90f0c69fedb8675d4aae9b
+    PIBT/3_33-0.png: fa305be461f8c2d2a370e1e9f72aea5fb7fe7a45a1bd7f7299df422655c7d582
+    PIBT/3_44.png: fdc5fff6e1a0eb0ca94bf611ba0a96fce82cc1cd1453b4adc25c6c2e6f56c94a
+    PIBT/44_32.png: 39f90849a30b9dc75293f6ba42340e72058fca730178fe786a7e9aa524fb653c
+    PIBT/46_28-0.png: ca5c3bfb6a09aef578a50e921fdc63c64c16760c2a51ccc2dd4a27c6c4ac5643
+    PIBT/72_23-0.png: fbac31c5d5eeeeafbaa9b505a483308697e541addd67575788bae0047de35c07
+    PIBT/72_63-0.png: 41813376c2bbf555a4eaf6176478e9baddfc68110fa9336ff0297752c67edff0
+    PIBT/74_66.png: 75fad9410b972cea20f876d8f1a06adb2b875e4945559f0abe5442ff35532404
+    PIBT/desktop.ini: 50259b89cb37eb6b18577250c97badc1a5140d2c0bb3a36902405dc961c73fe7
+- name: PIBT_LTF
+  url: https://airtclick.github.io/qdmapper/PIBT_LTF.zip
+  sha256: ef3b3764d36fe6fbfa09e9bdd1c1c1ba6441b6d8743010edfd4b8b19694e9f94
+  bytes: 28434
+  members:
+    PIBT_LTF/2_26.json: 7c22bf066314882c8eef848254b1da9106348806b94e892df0f523f058eb1686
+    PIBT_LTF/30_24.json: ffa97313a71e41aea8c24eec75877d3ed1142b3c6b9a2ccdd23a21b8c0fe3e3e
+    PIBT_LTF/47_28.json: be03e1be0cc997609aa728fb9930bbb95b86e9beb09af23c85c58baee1f7ff2b
+    PIBT_LTF/66_38.json: 9947b7145cc58bdb19631da9f9ba3873a81835d674583f009a73db9aad6a5c74
+  filename: PIBT_LTF.zip
+  ignored_members:
+    PIBT_LTF/2_26-0.png: 967306ff2e88e836db57b61f3feabe77e24fde67c3cffb0b54564723654f49d8
+    PIBT_LTF/30_24-0.png: 29884aa1be12b0beed23f7799e393e3afe60183a5c0886db7ad88d1e74f70e3b
+    PIBT_LTF/47_28-0.png: 4c883d4a18419f2ad69ca49a6abbeec0a4129454882e2012028e16fe883ab01d
+    PIBT_LTF/66_38-0.png: 8cea271ba1dea058f62f564bf970b7283eb1226bece7639436ced16e6ca9c714
+    PIBT_LTF/desktop.ini: d21bed68e9dcae9d1d643a166de98c54c97c5e49e3df69ac4da10588ef599c62

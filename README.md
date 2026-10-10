@@ -21,6 +21,14 @@ Just install from PyPI:
 pip install pogema-toolbox
 ```
 
+For the dataset preparation APIs in this fork, install from Git:
+
+```bash
+pip install "git+https://github.com/romanohu/pogema-toolbox.git@main"
+```
+
+Neural-MAPF pins an immutable tested revision for reproducibility.
+
 ## Features
 
 ### Register and use custom algorithms
@@ -63,6 +71,12 @@ custom_map = """
 # Registring custom_map
 ToolboxRegistry.register_maps({"custom_map": custom_map})
 ```
+
+### Dataset preparation
+
+See [pinned dataset preparation](docs/datasets.md) to prepare MovingAI data or
+verify explicit local QD-MAPPER inputs using toolbox alone. Raw dataset files
+remain external artifacts; parsing and generation never acquire missing data.
 
 ### Explicit map scenarios
 
