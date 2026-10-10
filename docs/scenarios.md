@@ -95,3 +95,39 @@ arrival advances to the next supplied target. Direct Pogema callers wanting
 that same consumption order should apply this cursor adjustment after each
 reset. Without it, Pogema repeats target zero on the first arrival. These APIs
 return `GridConfig` objects and do not modify Pogema behavior.
+
+## Local QD-MAPPER scenarios
+
+```python
+from pogema_toolbox.generators.qd_mapper import load_qd_map
+
+qd_map = load_qd_map("research-map.json")
+config = qd_map.grid_config(0, 32, max_episode_steps=256)
+```
+
+`load_qd_map` reads a local unweighted QD-MAPPER JSON file containing `name`,
+`weight: false`, `n_row`, `n_col`, `layout`, `start` and `goal`. It preserves
+all declared rows and columns, including nonsquare layouts. Layout symbols are
+`.` (free) and `@` (blocked); weighted maps and other symbols are rejected.
+Linear source indices use row-major order: `row = index // n_col` and
+`column = index % n_col`. Dimensions and indices must be integers, excluding
+booleans; all indices must refer to in-bounds free cells.
+
+The returned `QDMap` exposes `obstacles`, `name`, `source_hash` (SHA-256 of the
+original file bytes), and `problems`, an ordered list of stored scenarios.
+Each scenario contains source-ordered `MovingAIProblem` records with `start`
+and `goal` coordinates, `map_name` equal to the JSON name, and `bucket` equal
+to the zero-based scenario index. `distance` is `None` because the source
+provides no distances. Starts and goals must be unique within their own roles
+in every stored scenario, and each pair must be four-neighbor reachable.
+Cross-role overlap and an agent starting at its own goal are allowed.
+
+`grid_config(scenario_index, num_agents, **options)` replays exactly the first
+`num_agents` pairs of the selected scenario. Both arguments are integer indices
+or counts, excluding booleans; the scenario index must be in range and the
+positive agent count cannot exceed that scenario's stored pairs. Replay uses
+`on_target="nothing"` by default and also supports `"finish"`. Map, positions,
+dimensions and counts cannot be overridden through options. Loading and replay
+use local JSON only, without upstream optimization imports or archive
+unpickling. Research ZIPs are inputs for local verification and are not bundled
+with the toolbox.
