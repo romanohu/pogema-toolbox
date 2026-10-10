@@ -1,7 +1,7 @@
 # POGEMA Toolbox
 
 [![Downloads](https://static.pepy.tech/badge/pogema-toolbox)](https://pepy.tech/project/pogema-toolbox)
-[<img src="https://img.shields.io/badge/license-Apache_2.0-blue">](https://github.com/tinkoff-ai/CORL/blob/main/LICENSE)
+[<img src="https://img.shields.io/badge/license-Apache_2.0-blue">](LICENSE)
 ![PyPI](https://img.shields.io/pypi/v/pogema-toolbox?color=blue)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1XcLr-EmcgctKta3H1-zac_mnPqmG4Xxj?usp=sharing)
 
@@ -64,6 +64,13 @@ custom_map = """
 ToolboxRegistry.register_maps({"custom_map": custom_map})
 ```
 
+### Explicit map scenarios
+
+See [scenario parsing and sampling](docs/scenarios.md) for local MovingAI
+map/scenario parsing and deterministic explicit uniform or endpoint scenarios.
+See [Delivery and Sortation generators](docs/task_generators.md) for connected
+layouts with named pickup and delivery cells.
+
 ### Cities tiles
 
 The fixed cities-tile maps are from
@@ -71,10 +78,14 @@ The fixed cities-tile maps are from
 commit `842384ee18902b8e7c880c3f90c5fc8098520522`, asset path
 `eval_configs/04-movingai/maps.yaml`. The packaged asset SHA-256 is
 `3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f`.
-The upstream asset is licensed under the MIT License, with the notice
-`Copyright (c) 2025 Alexey Skrynnik`; the exact license from that revision is
-packaged in
+The DDG repository carries the MIT License notice
+`Copyright (c) 2025 Alexey Skrynnik`; the exact notice from that revision is
+retained in
 [`pogema_toolbox/licenses/MAPF-GPT-DDG-LICENSE`](pogema_toolbox/licenses/MAPF-GPT-DDG-LICENSE).
+That repository notice does not establish the rights to the underlying
+MovingAI database or its source content. Those rights require separate
+verification before reuse or redistribution. QD-MAPPER dataset permission
+also remains unverified; its reader accepts local files without bundling a dataset.
 
 ```python
 from pogema_toolbox.generators.cities_generator import CitiesTilesGenerator
