@@ -22,13 +22,16 @@ def _artifact_path(artifact_root, value):
     return path.resolve() if path.is_absolute() else (root / path).resolve()
 
 
-def dataset_manifest(dataset, *, artifact_root=".", manifest_path=None):
+def dataset_manifest(dataset, *, artifact_root=".", manifest_path=None, manifest=None):
     """Load a pinned packaged catalog or an explicit caller-supplied manifest."""
     if dataset not in ('movingai', 'cities_tiles', 'qd_mapper'):
         raise ValueError('Unsupported dataset')
-    text = (_artifact_path(artifact_root, manifest_path).read_text() if manifest_path else
-            read_text('pogema_toolbox.maps.' + dataset, 'manifest.yaml'))
-    manifest = yaml.safe_load(text)
+    if manifest is not None and manifest_path is not None:
+        raise ValueError('Select only one of manifest and manifest_path')
+    if manifest is None:
+        text = (_artifact_path(artifact_root, manifest_path).read_text() if manifest_path else
+                read_text('pogema_toolbox.maps.' + dataset, 'manifest.yaml'))
+        manifest = yaml.safe_load(text)
     if not isinstance(manifest, dict) or manifest.get('schema_version') != 1 or manifest.get('dataset') != dataset:
         raise ValueError(f'Invalid {dataset} manifest')
     return manifest
@@ -40,12 +43,13 @@ def data_directory(dataset, *, artifact_root="."):
 
 
 def prepare_maps(dataset, *, artifact_root=".", collections=None, staged_dir=None,
-                 local_dir=None, manifest_path=None, offline=False, timeout_seconds=30) -> dict:
+                 local_dir=None, manifest_path=None, manifest=None, offline=False, timeout_seconds=30) -> dict:
     """Verify all inputs before atomically replacing a prepared dataset.
 
     Relative input paths use artifact_root. QD requires explicit local inputs.
     """
-    manifest = dataset_manifest(dataset, artifact_root=artifact_root, manifest_path=manifest_path)
+    manifest = dataset_manifest(dataset, artifact_root=artifact_root, manifest_path=manifest_path,
+                                manifest=manifest)
     dataset = manifest['dataset']
     if dataset == 'cities_tiles':
         from pogema_toolbox.generators.cities_generator import load_cities_tiles, ASSET_SHA256

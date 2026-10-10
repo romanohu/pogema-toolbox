@@ -203,6 +203,48 @@ def test_manifest_rejects_wrong_dataset(tmp_path):
         dataset_manifest('movingai', artifact_root=tmp_path, manifest_path='bad.yaml')
 
 
+def test_mapping_manifest_prepares_verified_local_archive(staged_dataset):
+    options, archive, _, manifest = staged_dataset
+    options.pop('manifest_path')
+    assert dataset_manifest('movingai', manifest=manifest) == manifest
+    result = prepare_maps('movingai', manifest=manifest, offline=True, **options)
+    assert (Path(result['data_dir']) / 'tiny.map').read_bytes() == b'type octile\nheight 1\nwidth 3\nmap\n...\n'
+    assert result['receipt']['manifest_sha256'] == hashlib.sha256(
+        json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+    assert result['receipt']['archives'][0]['original_local_path'] == str(archive.resolve())
+
+
+@pytest.mark.parametrize('manifest', [[], {}, {'schema_version': 2, 'dataset': 'movingai'},
+                                    {'schema_version': 1, 'dataset': 'qd_mapper'}])
+def test_mapping_manifest_rejects_invalid_schema_before_side_effects(tmp_path, manifest):
+    root = tmp_path / 'artifacts'
+    with pytest.raises(ValueError, match='Invalid movingai manifest'):
+        dataset_manifest('movingai', manifest=manifest)
+    with pytest.raises(ValueError, match='Invalid movingai manifest'):
+        prepare_maps('movingai', manifest=manifest, artifact_root=root)
+    assert not root.exists()
+
+
+def test_mapping_manifest_rejects_simultaneous_path_before_side_effects(staged_dataset):
+    options, _, _, manifest = staged_dataset
+    with pytest.raises(ValueError, match='manifest'):
+        dataset_manifest('movingai', manifest=manifest, manifest_path=options['manifest_path'])
+    with pytest.raises(ValueError, match='manifest'):
+        prepare_maps('movingai', manifest=manifest, **options)
+    assert not options['artifact_root'].exists()
+
+
+def test_qd_mapping_manifest_rejects_automatic_acquisition_before_side_effects(tmp_path, monkeypatch):
+    def forbid_network(*args, **kwargs):
+        raise AssertionError('QD preparation must not make network calls')
+    monkeypatch.setattr('urllib.request.urlopen', forbid_network)
+    root = tmp_path / 'artifacts'
+    manifest = {'schema_version': 1, 'dataset': 'qd_mapper', 'archives': []}
+    with pytest.raises(ValueError, match='permission_unverified'):
+        prepare_maps('qd_mapper', manifest=manifest, artifact_root=root)
+    assert not root.exists()
+
+
 def test_prepare_verifies_packaged_cities():
     result = prepare_maps('cities_tiles')
     assert result == {'dataset': 'cities_tiles', 'map_count': 128,

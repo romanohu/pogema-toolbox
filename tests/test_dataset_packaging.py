@@ -50,10 +50,13 @@ import pogema_toolbox.datasets as datasets
 assert Path(sys.argv[1]).resolve() in Path(datasets.__file__).resolve().parents
 for dataset in ('movingai', 'cities_tiles', 'qd_mapper'):
     assert datasets.dataset_manifest(dataset)['dataset'] == dataset
+assert datasets.dataset_manifest('movingai', manifest={
+    'schema_version': 1, 'dataset': 'movingai', 'maps': [], 'archives': []})['maps'] == []
 assert datasets.prepare_maps('cities_tiles')['map_count'] == 128
 root = Path(sys.argv[2])
 try:
-    datasets.prepare_maps('qd_mapper', artifact_root=root)
+    datasets.prepare_maps('qd_mapper', artifact_root=root, manifest={
+        'schema_version': 1, 'dataset': 'qd_mapper', 'archives': []})
 except ValueError as exc:
     assert 'permission_unverified' in str(exc)
 else:

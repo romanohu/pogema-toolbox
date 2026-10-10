@@ -65,14 +65,18 @@ receipts retain the original directory or ZIP path and `permission_unverified`;
 verification does not establish redistribution permission.
 
 The public API also includes `dataset_manifest(dataset, *, artifact_root=".",
-manifest_path=None)`, `data_directory(dataset, *, artifact_root=".")` and
+manifest_path=None, manifest=None)`, `data_directory(dataset, *, artifact_root=".")` and
 `selected_archives(manifest, collections=None)`. `prepare_maps` accepts these
 keyword arguments: `artifact_root="."`, `collections=None`, `staged_dir=None`,
-`local_dir=None`, `manifest_path=None`, `offline=False`, `timeout_seconds=30`.
+`local_dir=None`, `manifest_path=None`, `manifest=None`, `offline=False`, `timeout_seconds=30`.
 Relative manifest and import paths are relative to `artifact_root`. Prepared
 files use `<artifact_root>/maps/<dataset>/data`; explicit custom manifests must
-use schema version 1 and the requested dataset name. `staged_dir` and
-`local_dir` cannot be combined.
+use schema version 1 and the requested dataset name. Instead of `manifest_path`,
+both manifest loading and preparation accept a plain resolved dictionary via
+`manifest=...`; it must have the same schema version and dataset name. Supplying
+both inputs is rejected. Toolbox does not resolve interpolation expressions;
+configuration integrations resolve them before passing the dictionary.
+`staged_dir` and `local_dir` cannot be combined.
 
 `prepare_maps("cities_tiles")` verifies the existing packaged asset and returns
 its map count and SHA-256, without creating a raw data directory. Use the

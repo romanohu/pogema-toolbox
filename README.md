@@ -21,6 +21,14 @@ Just install from PyPI:
 pip install pogema-toolbox
 ```
 
+For the dataset preparation APIs in this fork, install from Git:
+
+```bash
+pip install "git+https://github.com/romanohu/pogema-toolbox.git@main"
+```
+
+Neural-MAPF pins an immutable tested revision for reproducibility.
+
 ## Features
 
 ### Register and use custom algorithms
