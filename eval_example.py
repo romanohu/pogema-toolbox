@@ -1,4 +1,4 @@
-from pogema_toolbox.evaluator import evaluation
+from pogema_toolbox.evaluator import evaluate
 from pogema import BatchAStarAgent
 
 from pogema_toolbox.eval_utils import initialize_wandb, save_evaluation_results, create_and_push_summary_archive
@@ -36,7 +36,7 @@ def main(disable_wandb=True):
             disable_wandb = True
 
         initialize_wandb(evaluation_config, eval_dir, disable_wandb, PROJECT_NAME)
-        evaluation(evaluation_config, eval_dir=eval_dir)
+        evaluate(evaluation_config, eval_dir=eval_dir)
         save_evaluation_results(eval_dir)
         wandb.finish()
 

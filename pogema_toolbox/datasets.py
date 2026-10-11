@@ -42,7 +42,7 @@ def data_directory(dataset, *, artifact_root="."):
     return selected_path(_artifact_path(artifact_root, '.'), f'maps/{dataset}/data')
 
 
-def prepare_maps(dataset, *, artifact_root=".", collections=None, staged_dir=None,
+def prepare_dataset(dataset, *, artifact_root=".", collections=None, staged_dir=None,
                  local_dir=None, manifest_path=None, manifest=None, offline=False, timeout_seconds=30) -> dict:
     """Verify all inputs before atomically replacing a prepared dataset.
 

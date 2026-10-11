@@ -43,7 +43,7 @@ import sys
 sys.path.insert(0, sys.argv[1])
 class ForbidNeural(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split('.')[0] in ('neural_mapf', 'hydra', 'omegaconf'):
+        if fullname.split('.')[0] in ('neural_mapf', 'hydra', 'omegaconf', 'torch', 'dask', 'matplotlib'):
             raise AssertionError('standalone preparation imported ' + fullname)
 sys.meta_path.insert(0, ForbidNeural())
 import pogema_toolbox.datasets as datasets
@@ -52,19 +52,29 @@ for dataset in ('movingai', 'cities_tiles', 'qd_mapper'):
     assert datasets.dataset_manifest(dataset)['dataset'] == dataset
 assert datasets.dataset_manifest('movingai', manifest={
     'schema_version': 1, 'dataset': 'movingai', 'maps': [], 'archives': []})['maps'] == []
-assert datasets.prepare_maps('cities_tiles')['map_count'] == 128
+assert datasets.prepare_dataset('cities_tiles')['map_count'] == 128
 root = Path(sys.argv[2])
 try:
-    datasets.prepare_maps('qd_mapper', artifact_root=root, manifest={
+    datasets.prepare_dataset('qd_mapper', artifact_root=root, manifest={
         'schema_version': 1, 'dataset': 'qd_mapper', 'archives': []})
 except ValueError as exc:
     assert 'permission_unverified' in str(exc)
 else:
     raise AssertionError('QD acquisition must be rejected')
 assert not root.exists()
-print('standalone preparation verified')
+from pogema_toolbox import Instance, generate_instances, generate_suite, prepare_dataset
+assert prepare_dataset is datasets.prepare_dataset
+assert Instance([[0, 0]], [[0, 0]], [[0, 1]], {}).to_grid_config().num_agents == 1
+assert len(generate_instances({'grid': {'size': 8, 'density': 0, 'num_agents': 1},
+                               'episodes': 1, 'generation_seed': 3})) == 1
+result = generate_suite({'dataset': 'cities_tiles', 'mode': 'single',
+    'map_name': 'Berlin_1_256_00', 'agent_counts': [1], 'episodes': 1,
+    'generation_seed': 3}, output_dir=root.parent / 'generated')
+import json
+assert json.loads(Path(result['suite_path']).read_text())['provenance']['toolbox_revision'] is None
+print('standalone preparation and generation verified')
 '''
     env = dict(os.environ)
     env.pop('PYTHONPATH', None)
     smoke = subprocess.run([sys.executable, '-I', '-c', script, str(installed), str(tmp_path / 'artifacts')], cwd=tmp_path, env=env, check=True, capture_output=True, text=True)
-    assert smoke.stdout.strip() == 'standalone preparation verified'
+    assert smoke.stdout.strip() == 'standalone preparation and generation verified'

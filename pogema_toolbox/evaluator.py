@@ -324,7 +324,7 @@ def run_views(results, evaluation_config, eval_dir=None):
     return view_results
 
 
-def evaluation(evaluation_config, eval_dir=None):
+def evaluate(evaluation_config, eval_dir=None):
     """
     Runs the evaluation based on the evaluation configuration.
 
