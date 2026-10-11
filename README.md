@@ -1,91 +1,118 @@
 # POGEMA Toolbox
 
-[![Downloads](https://static.pepy.tech/badge/pogema-toolbox)](https://pepy.tech/project/pogema-toolbox)
-[<img src="https://img.shields.io/badge/license-Apache_2.0-blue">](LICENSE)
-![PyPI](https://img.shields.io/pypi/v/pogema-toolbox?color=blue)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1XcLr-EmcgctKta3H1-zac_mnPqmG4Xxj?usp=sharing)
+This fork of [Tviskaron/pogema-toolbox](https://github.com/Tviskaron/pogema-toolbox)
+provides explicit MAPF instances, deterministic benchmark generation, verified
+dataset preparation, and the upstream algorithm registry and evaluation tools.
+It supports Python 3.8+. Preparation and generation work with toolbox alone,
+without Neural-MAPF, Hydra, OmegaConf, Torch, Dask or plotting imports.
 
-## Overview 
-
-The POGEMA Toolbox is a comprehensive framework designed to facilitate the testing of learning-based approaches within the POGEMA environment. This toolbox offers a unified interface that enables the seamless execution of any learnable MAPF algorithm in POGEMA. 
-
-- Firstly, the toolbox provides robust management tools for custom maps, allowing users to register and utilize these maps effectively within POGEMA. 
-- Secondly, it enables the concurrent execution of multiple testing instances across various algorithms in a distributed manner, leveraging Dask for scalable processing. The results from these instances are then aggregated for analysis. 
-- Lastly, the toolbox includes visualization capabilities, offering a convenient method to graphically represent aggregated results through detailed plots.
-
-## Installation
-
-Just install from PyPI:
-
-```bash
-pip install pogema-toolbox
-```
-
-For the dataset preparation APIs in this fork, install from Git:
+Install this fork from Git, or install a local checkout:
 
 ```bash
 pip install "git+https://github.com/romanohu/pogema-toolbox.git@main"
+# From this repository:
+pip install .
 ```
 
-Neural-MAPF pins an immutable tested revision for reproducibility.
+For reproducible runs, replace `main` with your tested commit. The upstream
+`pip install pogema-toolbox` PyPI package does not include this fork's additions.
 
-## Features
-
-### Register and use custom algorithms
-
-To register an algorithm and then create an inference instance, one can use:
+## Python quick start
 
 ```python
-from pogema import BatchAStarAgent
+from pogema_toolbox import generate_instances, save_instances, load_instances
 
-# Registring A* algorithm
-ToolboxRegistry.register_algorithm('A*', BatchAStarAgent)
-
-# Creating algorithm
-algo = ToolboxRegistry.create_algorithm("A*")
+instances = generate_instances({
+    "grid": {"size": 8, "density": 0, "num_agents": 2,
+             "on_target": "nothing", "max_episode_steps": 32},
+    "episodes": 2,
+    "generation_seed": 42,
+})
+save_instances(instances, "artifacts/instances.jsonl")
+restored = load_instances("artifacts/instances.jsonl")
+assert [instance.id for instance in restored] == [instance.id for instance in instances]
+grid_config = restored[0].to_grid_config()
 ```
 
-The algorithm should provide a method act, which receives a batch of observations.
+`Instance` stores explicit obstacles, starts, targets, grid options and optional
+lifelong target sequences. JSONL round-trips preserve its canonical ID.
+Use `generate_suite(benchmark, output_dir="artifacts/delivery")` for grouped
+benchmark generation, using the same plain mapping as the CLI example below.
 
-A more complex example is an algorithm with tunable hyperparameters. Here is an example with the Follower approach:
-```python
-ToolboxRegistry.register_algorithm('Follower', FollowerInference, FollowerInferenceConfig,
-                                       follower_preprocessor)
-```
-For the full evaluation code example, please refer to [Follower repository](https://github.com/AIRI-Institute/learn-to-follow/blob/main/eval.py)
+## Dataset CLI
 
-### Register custom maps
-
-To create a custom map, the user first needs to define it using ASCII symbols or by uploading it from a file, and then register it using the toolbox:
-
-```python
-from pogema_toolbox.registry import ToolboxRegistry
-
-# Creating cusom_map
-custom_map = """
-.......#.
-...#...#.
-.#.###.#.
-"""
-
-# Registring custom_map
-ToolboxRegistry.register_maps({"custom_map": custom_map})
+```bash
+pogema-toolbox datasets list
+pogema-toolbox datasets prepare cities_tiles
+pogema-toolbox datasets generate --config examples/delivery.yaml --output-dir artifacts/delivery
+python -m pogema_toolbox datasets list
 ```
 
-### Dataset preparation
+The Delivery example is self-contained and requires no external dataset. From
+an installed package outside the checkout, save the following as `delivery.yaml`
+and use `--config delivery.yaml`:
 
-See [pinned dataset preparation](docs/datasets.md) to prepare MovingAI data or
-verify explicit local QD-MAPPER inputs using toolbox alone. Raw dataset files
-remain external artifacts; parsing and generation never acquire missing data.
+```yaml
+dataset: delivery
+layout:
+  width_min: 17
+  width_max: 21
+  height_min: 17
+  height_max: 21
+  block_width_min: 3
+  block_width_max: 4
+  block_height_min: 3
+  block_height_max: 4
+  aisle_width_min: 2
+  aisle_width_max: 3
+map_seeds: [7, 8]
+generation_seed: 42
+agent_counts: [4, 8]
+episodes: 2
+sampling: endpoints
+grid:
+  obs_radius: 2
+  max_episode_steps: 32
+  on_target: restart
+  collision_system: priority
+  observation_type: POMAPF
+```
 
-### Explicit map scenarios
+This produces four groups and eight episodes with explicit lifelong goals.
+Successful operations print one JSON value. Root and dataset-group commands
+without arguments show help; invalid input exits nonzero with an error on stderr.
+Use `--help` on any command for its options.
 
-See [scenario parsing and sampling](docs/scenarios.md) for local MovingAI
-map/scenario parsing and deterministic explicit uniform or endpoint scenarios.
-See [Delivery and Sortation generators](docs/task_generators.md) for connected
-layouts with named pickup and delivery cells.
+`--config` is relative to the caller's working directory. It contains a plain
+benchmark mapping, with literal values and no Hydra wrapper or `${...}`
+interpolation. Benchmark paths such as `manifest_path` and `suite_path` remain
+relative to `--artifact-root` (default `.`). Without `suite_path`, generation
+writes `suite.json` and group JSONL files beneath `--output-dir`.
 
-### Cities tiles
+Cities Tiles uses the packaged asset; Delivery and Sortation are procedural.
+MovingAI suites require explicitly prepared maps/scenarios. QD-MAPPER requires
+verified caller-supplied local inputs because acquisition permission remains
+unverified. Preparation is explicit: evaluation, parsing and generation never
+download missing artifacts. See [dataset preparation and suite generation](docs/datasets.md),
+[scenario parsing and replay](docs/scenarios.md), and
+[Delivery and Sortation layouts](docs/task_generators.md).
+
+## Algorithms and evaluation
+
+Use `from pogema_toolbox import ToolboxRegistry, evaluate` to register algorithms
+and call `evaluate(evaluation_config, eval_dir=None)`. Evaluation uses a separate
+mapping containing `environment`, `algorithms` and optional `results_views`;
+it is not the dataset CLI's benchmark YAML. Algorithms provide `act(observations)`.
+The upstream sequential, multiprocessing and Dask backends and result views
+remain available. See the [Follower evaluation example](https://github.com/AIRI-Institute/learn-to-follow/blob/main/eval.py)
+for algorithm integration; use this fork's canonical `evaluate` entry point.
+
+## Licenses and assets
+
+Toolbox code retains the upstream [Apache License 2.0](LICENSE). Copied original
+MIT code retains the exact [Neural-MAPF MIT notice](pogema_toolbox/licenses/Neural-MAPF-LICENSE).
+Code licenses do not replace third-party dataset terms; preserve the exact
+[asset notices and acquisition gates](docs/datasets.md#notices-and-rights).
 
 The fixed cities-tile maps are from
 [Cognitive-AI-Systems/MAPF-GPT-DDG](https://github.com/Cognitive-AI-Systems/MAPF-GPT-DDG)
@@ -101,102 +128,18 @@ MovingAI database or its source content. Those rights require separate
 verification before reuse or redistribution. QD-MAPPER dataset permission
 also remains unverified; its reader accepts local files without bundling a dataset.
 
-```python
-from pogema_toolbox.generators.cities_generator import CitiesTilesGenerator
-
-CitiesTilesGenerator.official().generate()
-CitiesTilesGenerator.single(
-    map_name="Berlin_1_256_00",
-    num_agents=(64, 128),
-    num_samples=100,
-    seed=42,
-).generate()
-CitiesTilesGenerator.random(
-    num_agents=(64, 128, 192, 256),
-    num_samples=1000,
-    seed=42,
-).generate()
-```
-
-`official` returns exactly 512 instances in map-major order: the 128 map names
-in `CITY_NAMES`/tile-index order, each followed by agent counts 64, 128, 192,
-and 256. Every official scenario uses seed 0. The fixed environment constants
-are a 256-step limit, observation radius 5, `MAPF` observations, soft
-collisions, and `on_target="nothing"`.
-
-`single` fixes `map_name`; `random` selects each map uniformly from all 128
-maps. Both modes independently select an entry uniformly from `num_agents` and
-draw a non-negative 32-bit scenario seed for every sample. Sampling is with
-replacement, so repeated map, agent-count, or complete scenario selections are
-allowed, and the supplied generator `seed` makes their ordered sequence
-reproducible. Every returned `CitiesTilesInstance` contains `grid_config`,
-`city`, `tile_index`, `map_name`, `num_agents`, and `scenario_seed` metadata.
-
-### Evaluation script
-
-Example of the POGEMA Toolbox configuration for parallel testing of the RHCR approach and visualization of its results.
-
-```yaml
-environment: # Configuring Test Environments
-  name: Environment
-  on_target: 'restart'
-  max_episode_steps: 128
-  observation_type: 'POMAPF'
-  collision_system: 'soft'
-  seed: 
-    grid_search: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]
-  num_agents:
-    grid_search: [ 8, 16, 24, 32, 48, 64 ]
-  map_name:
-    grid_search: [
-        validation-mazes-seed-000, validation-mazes-seed-001, validation-mazes-seed-002, 
-        validation-mazes-seed-003, validation-mazes-seed-004, validation-mazes-seed-005, 
-    ]
-
-algorithms: # Specifying algorithms and it's hyperparameters
-  RHCR-5-10:
-    name: RHCR
-    parallel_backend: 'balanced_dask'
-    num_process: 32
-    simulation_window: 5
-    planning_window: 10
-    time_limit: 10
-    low_level_planner: 'SIPP'
-    solver: 'PBS'
-
-results_views: # Defining results visualization 
-  01-mazes:
-    type: plot
-    x: num_agents
-    y: avg_throughput
-    width: 4.0
-    height: 3.1
-    line_width: 2
-    use_log_scale_x: True
-    legend_font_size: 8
-    font_size: 8
-    name: Mazes
-    ticks: [8, 16, 24, 32, 48, 64]
-
-  TabularThroughput:
-    type: tabular
-    drop_keys: [ seed, map_name]
-    print_results: True
-```
-
-The configuration is split into three main sections. The first one details the parameters of the POGEMA environment used for testing. It also includes iteration over the number of agents, seeds, and names of the maps (which were registered beforehand). The unified `grid_search` tag allows for the examination of any existing parameter of the environment. The second part of the configuration is a list of algorithms to be tested. Each algorithm has its alias (which will be shown in the results) and name, which specifies the family of methods. It also includes a list of hyperparameters common to different approaches, e.g., number of processes, parallel backend, etc., and the specific parameters of the algorithm.
-
-
 ## Citation
-If you use this repository in your research or wish to cite it, please make a reference to our paper: 
-```
+
+If you use this repository in research, cite the upstream POGEMA paper:
+
+```bibtex
 @misc{skrynnik2024pogema,
-      title={POGEMA: A Benchmark Platform for Cooperative Multi-Agent Navigation}, 
+      title={POGEMA: A Benchmark Platform for Cooperative Multi-Agent Navigation},
       author={Alexey Skrynnik and Anton Andreychuk and Anatolii Borzilov and Alexander Chernyavskiy and Konstantin Yakovlev and Aleksandr Panov},
       year={2024},
       eprint={2407.14931},
       archivePrefix={arXiv},
       primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2407.14931}, 
+      url={https://arxiv.org/abs/2407.14931},
 }
 ```

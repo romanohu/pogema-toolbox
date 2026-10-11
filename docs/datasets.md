@@ -1,8 +1,8 @@
 # Pinned dataset preparation
 
-`pogema_toolbox.datasets` prepares the pinned MovingAI and QD-MAPPER catalogs
-without Neural-MAPF, Hydra or OmegaConf. Raw maps and scenarios remain external
-caller-owned artifacts. The wheel and source distribution contain catalogs,
+`prepare_dataset` from `pogema_toolbox` prepares the pinned MovingAI and
+QD-MAPPER catalogs without Neural-MAPF, Hydra or OmegaConf. Raw maps and scenarios
+remain external caller-owned artifacts. The wheel and source distribution contain catalogs,
 notices and the existing Cities Tiles asset; they do not contain the acquired
 MovingAI or QD-MAPPER files.
 
@@ -14,13 +14,12 @@ existing data and its receipt. The returned `receipt` is also written to
 
 ```python
 from pathlib import Path
-from pogema_toolbox.datasets import prepare_maps
-from pogema_toolbox.moving_ai_ingestion import (
-    parse_movingai_map, parse_movingai_scenarios, movingai_grid_config,
+from pogema_toolbox import (
+    prepare_dataset, parse_movingai_map, parse_movingai_scenarios,
+    movingai_grid_config, ScenarioSampler,
 )
-from pogema_toolbox.generators.scenario_generator import ScenarioSampler
 
-prepared = prepare_maps("movingai", artifact_root="./artifacts")
+prepared = prepare_dataset("movingai", artifact_root="./artifacts")
 data = Path(prepared["data_dir"])
 map_name = "random-32-32-10"
 obstacles = parse_movingai_map((data / (map_name + ".map")).read_text())
@@ -44,9 +43,9 @@ acquisition is rejected before filesystem or network side effects. Supply
 explicit local collection ZIPs or an extracted directory:
 
 ```python
-from pogema_toolbox.generators.qd_mapper import load_qd_map
+from pogema_toolbox import load_qd_map
 
-qd = prepare_maps(
+qd = prepare_dataset(
     "qd_mapper", artifact_root="./artifacts",
     local_dir="/absolute/path/to/extracted-collections",
     collections=["CBS"], offline=True,
@@ -64,9 +63,9 @@ retain their supplied order and must be nonempty, unique known names. Local
 receipts retain the original directory or ZIP path and `permission_unverified`;
 verification does not establish redistribution permission.
 
-The public API also includes `dataset_manifest(dataset, *, artifact_root=".",
-manifest_path=None, manifest=None)`, `data_directory(dataset, *, artifact_root=".")` and
-`selected_archives(manifest, collections=None)`. `prepare_maps` accepts these
+The root public API also includes `dataset_manifest(dataset, *, artifact_root=".",
+manifest_path=None, manifest=None)` and `data_directory(dataset, *, artifact_root=".")`.
+`prepare_dataset` accepts these
 keyword arguments: `artifact_root="."`, `collections=None`, `staged_dir=None`,
 `local_dir=None`, `manifest_path=None`, `manifest=None`, `offline=False`, `timeout_seconds=30`.
 Relative manifest and import paths are relative to `artifact_root`. Prepared
@@ -78,10 +77,68 @@ both inputs is rejected. Toolbox does not resolve interpolation expressions;
 configuration integrations resolve them before passing the dictionary.
 `staged_dir` and `local_dir` cannot be combined.
 
-`prepare_maps("cities_tiles")` verifies the existing packaged asset and returns
+The installed console and module entry points expose the same preparation options:
+
+```bash
+pogema-toolbox datasets list
+pogema-toolbox datasets prepare movingai --artifact-root ./artifacts
+python -m pogema_toolbox datasets prepare movingai --artifact-root ./artifacts --staged-dir ../archives --offline
+pogema-toolbox datasets prepare qd_mapper --artifact-root ./artifacts --local-dir ../collections --collections CBS EECBS --offline
+```
+
+`--collections` takes one or more names in the supplied order. Preparation also
+accepts `--manifest-path FILE` and `--timeout-seconds NUMBER` (default `30`).
+The CLI uses the public API's defaults: artifact root `.`, no collection filter,
+no local input or manifest override, and online preparation unless `--offline`
+is supplied. Relative manifest, staged and local paths use the artifact root.
+Listing reads packaged catalogs and reports attribution/source, rights and
+available QD collections; it does not acquire data or construct a policy.
+
+`prepare_dataset("cities_tiles")` verifies the existing packaged asset and returns
 its map count and SHA-256, without creating a raw data directory. Use the
-[Cities Tiles generators](../README.md#cities-tiles) to generate scenarios.
+[Cities Tiles generator](../README.md#dataset-cli) to generate scenarios.
 See [scenario parsing and sampling](scenarios.md) for parser and sampler details.
+
+## Suite generation
+
+```python
+import json
+from pathlib import Path
+import yaml
+from pogema_toolbox import generate_suite, load_instances
+
+benchmark = yaml.safe_load(Path("examples/delivery.yaml").read_text())
+result = generate_suite(benchmark, output_dir="artifacts/delivery", artifact_root="artifacts")
+index = Path(result["suite_path"])
+suite = json.loads(index.read_text())
+first_group = suite["groups"][0]
+instances = load_instances(index.parent / first_group["instances_path"])
+```
+
+```bash
+pogema-toolbox datasets generate --config examples/delivery.yaml --output-dir artifacts/delivery --artifact-root artifacts
+```
+
+Use the complete [Delivery YAML example](../examples/delivery.yaml), also printed
+in the [quick start](../README.md#dataset-cli) for use outside a checkout. It
+includes layout ranges, separate map/scenario seeds, agent counts, episode counts,
+and restart/horizon settings. Delivery and Sortation require no external assets;
+Cities Tiles uses the packaged asset. MovingAI and QD-MAPPER generation require
+already verified external files beneath `<artifact_root>/maps/<dataset>/data`.
+Missing or mismatched inputs are recorded as invalid groups with preparation
+instructions; generation never downloads them.
+
+The config path is relative to the caller's working directory. Its YAML root
+must be the benchmark mapping itself, without a `benchmark:` wrapper, and all
+values must be literal: unresolved `${...}` interpolation is rejected. Paths
+inside that mapping retain public API artifact-root semantics. An explicit
+`suite_path` selects the index beneath the artifact root; otherwise `suite.json`
+is written beneath `--output-dir`. Group JSONL files are relative to the index.
+The returned JSON reports the index path, group/episode counts and invalid groups.
+The index records generation parameters, source hashes, rights and toolbox
+version/revision. A wheel without VCS provenance reports a null revision.
+
+## Notices and rights
 
 Preserve the packaged [MovingAI attribution](../pogema_toolbox/maps/movingai/notices/ATTRIBUTION.md),
 [Cities Tiles notices](../pogema_toolbox/maps/cities_tiles/notices/ATTRIBUTION.md)

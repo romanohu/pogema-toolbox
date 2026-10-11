@@ -61,6 +61,7 @@ setup(
     package_dir={'': './'},
     packages=find_packages(where='./', include='pogema_toolbox*'),
     include_package_data=True,
+    entry_points={'console_scripts': ['pogema-toolbox=pogema_toolbox.cli:main']},
     python_requires='>=3.8',
     package_data={
         'pogema_toolbox': ['licenses/*', 'maps/*.yaml', 'maps/*/manifest.yaml', 'maps/*/notices/*'],

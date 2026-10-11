@@ -5,13 +5,10 @@ of unspecified paper maps. They do not download datasets or create evaluation
 runs. Existing Warehouse and Cities generator APIs are unchanged.
 
 ```python
-from pogema_toolbox.generators.delivery_generator import (
-    DeliveryRangeSettings, generate_delivery,
+from pogema_toolbox import (
+    DeliveryRangeSettings, generate_delivery, SortationRangeSettings,
+    generate_sortation, ScenarioSampler,
 )
-from pogema_toolbox.generators.sortation_generator import (
-    SortationRangeSettings, generate_sortation,
-)
-from pogema_toolbox.generators.scenario_generator import ScenarioSampler
 
 layout = generate_delivery(
     width=17, height=17, block_width=3, block_height=3, aisle_width=2, seed=7,
@@ -99,3 +96,10 @@ For direct Pogema restart replay, set
 already-active first target is consumed once. See
 [scenario parsing and sampling](scenarios.md) for full scenario validation and
 replay rules. Map and scenario seeds are separate inputs.
+
+To persist complete benchmark groups, use `generate_suite` from the package root
+or `pogema-toolbox datasets generate --config examples/delivery.yaml --output-dir artifacts/delivery`.
+The [complete Delivery YAML](../examples/delivery.yaml) specifies inclusive
+layout ranges, map seeds, scenario generation seed, agent counts, episode counts,
+and grid horizon/restart settings. See [suite generation](datasets.md#suite-generation)
+for config and artifact path rules; no external dataset or model is required.

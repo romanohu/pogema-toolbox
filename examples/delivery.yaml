@@ -1,0 +1,23 @@
+dataset: delivery
+layout:
+  width_min: 17
+  width_max: 21
+  height_min: 17
+  height_max: 21
+  block_width_min: 3
+  block_width_max: 4
+  block_height_min: 3
+  block_height_max: 4
+  aisle_width_min: 2
+  aisle_width_max: 3
+map_seeds: [7, 8]
+generation_seed: 42
+agent_counts: [4, 8]
+episodes: 2
+sampling: endpoints
+grid:
+  obs_radius: 2
+  max_episode_steps: 32
+  on_target: restart
+  collision_system: priority
+  observation_type: POMAPF

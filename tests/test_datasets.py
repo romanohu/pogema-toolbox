@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from pogema_toolbox.datasets import dataset_manifest, data_directory, prepare_maps, selected_archives
+from pogema_toolbox.datasets import dataset_manifest, data_directory, prepare_dataset, selected_archives
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def test_offline_prepare_checks_hash_and_preserves_existing_data(staged_dataset)
     cfg, archive, _, _ = staged_dataset
     cfg['offline'] = True
     cfg['staged_dir'] = '../staged'
-    result = prepare_maps('movingai', **cfg)
+    result = prepare_dataset('movingai', **cfg)
     data = Path(result['data_dir'])
     assert (data / 'tiny.map').read_text().endswith('...\n')
     assert json.loads((data / 'receipt.json').read_text())['archives'][0]['sha256'] == hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -42,7 +42,7 @@ def test_offline_prepare_checks_hash_and_preserves_existing_data(staged_dataset)
     assert json.loads((data / 'receipt.json').read_text()) == result['receipt']
     archive.write_bytes(b'bad replacement')
     with pytest.raises(ValueError, match='SHA256'):
-        prepare_maps('movingai', **cfg)
+        prepare_dataset('movingai', **cfg)
     assert (data / 'tiny.map').read_text().endswith('...\n')
 
 
@@ -65,7 +65,7 @@ def test_prepare_rejects_unsafe_archive_members(staged_dataset, kind):
     manifest['archives'][0]['members']['tiny.map'] = hashlib.sha256(b'content').hexdigest()
     source.write_text(yaml.safe_dump(manifest))
     with pytest.raises(ValueError):
-        prepare_maps('movingai', **cfg)
+        prepare_dataset('movingai', **cfg)
     assert not (archive.parent.parent / 'escaped').exists()
 
 
@@ -80,12 +80,12 @@ def test_prepare_rejects_staged_directory_symlink(staged_dataset, tmp_path, nest
         alias.symlink_to(archive.parent, target_is_directory=True)
         cfg['staged_dir'] = str(alias)
     with pytest.raises(ValueError, match='symlink'):
-        prepare_maps('movingai', **cfg)
+        prepare_dataset('movingai', **cfg)
 
 
 def test_prepare_rejects_destination_alias_and_preserves_existing_data(staged_dataset):
     cfg, archive, source, manifest = staged_dataset
-    prepared = prepare_maps('movingai', **cfg)
+    prepared = prepare_dataset('movingai', **cfg)
     data = Path(prepared['data_dir'])
     original = (data / 'tiny.map').read_bytes()
     original_receipt = (data / 'receipt.json').read_bytes()
@@ -99,7 +99,7 @@ def test_prepare_rejects_destination_alias_and_preserves_existing_data(staged_da
     }
     source.write_text(yaml.safe_dump(manifest))
     with pytest.raises(ValueError, match='Duplicate'):
-        prepare_maps('movingai', **cfg)
+        prepare_dataset('movingai', **cfg)
     assert (data / 'tiny.map').read_bytes() == original
     assert (data / 'receipt.json').read_bytes() == original_receipt
     assert not (data / 'nested/tiny.map').exists()
@@ -126,7 +126,7 @@ def local_qd_dataset(tmp_path):
 @pytest.mark.parametrize('collections, names', [(None, ['CBS', 'LTF']), (['LTF', 'CBS'], ['LTF', 'CBS']), (['LTF'], ['LTF'])])
 def test_qd_local_import_preserves_selection_and_receipt(local_qd_dataset, collections, names):
     options, local, contents = local_qd_dataset
-    result = prepare_maps('qd_mapper', collections=collections, **options)
+    result = prepare_dataset('qd_mapper', collections=collections, **options)
     data = Path(result['data_dir'])
     assert result['map_count'] == len(names)
     assert [entry['name'] for entry in result['receipt']['archives']] == names
@@ -146,7 +146,7 @@ def test_qd_rejects_invalid_collection_selection(local_qd_dataset, collections):
     with pytest.raises(ValueError, match='collections'):
         selected_archives(manifest, collections)
     with pytest.raises(ValueError, match='collections'):
-        prepare_maps('qd_mapper', collections=collections, **options)
+        prepare_dataset('qd_mapper', collections=collections, **options)
     assert not options['artifact_root'].exists()
 
 
@@ -156,18 +156,18 @@ def test_qd_rejects_automatic_acquisition_before_side_effects(tmp_path, monkeypa
     monkeypatch.setattr('urllib.request.urlopen', forbid_network)
     root = tmp_path / 'artifacts'
     with pytest.raises(ValueError, match='permission_unverified'):
-        prepare_maps('qd_mapper', artifact_root=root)
+        prepare_dataset('qd_mapper', artifact_root=root)
     assert not root.exists()
 
 
 def test_qd_local_hash_failure_preserves_existing_data(local_qd_dataset):
     options, local, contents = local_qd_dataset
-    result = prepare_maps('qd_mapper', **options)
+    result = prepare_dataset('qd_mapper', **options)
     data = Path(result['data_dir'])
     receipt = (data / 'receipt.json').read_bytes()
     (local / 'LTF/tiny.json').write_bytes(b'bad replacement')
     with pytest.raises(ValueError, match='SHA256'):
-        prepare_maps('qd_mapper', **options)
+        prepare_dataset('qd_mapper', **options)
     assert (data / 'LTF/tiny.json').read_bytes() == contents
     assert (data / 'receipt.json').read_bytes() == receipt
 
@@ -184,7 +184,7 @@ def test_qd_rejects_local_symlinks(local_qd_dataset, tmp_path, kind):
         alias.symlink_to(local if kind == 'root' else tmp_path, target_is_directory=True)
         options['local_dir'] = alias if kind == 'root' else alias / 'local'
     with pytest.raises(ValueError, match='symlink'):
-        prepare_maps('qd_mapper', **options)
+        prepare_dataset('qd_mapper', **options)
 
 
 def test_data_directory_uses_artifact_root(tmp_path):
@@ -207,7 +207,7 @@ def test_mapping_manifest_prepares_verified_local_archive(staged_dataset):
     options, archive, _, manifest = staged_dataset
     options.pop('manifest_path')
     assert dataset_manifest('movingai', manifest=manifest) == manifest
-    result = prepare_maps('movingai', manifest=manifest, offline=True, **options)
+    result = prepare_dataset('movingai', manifest=manifest, offline=True, **options)
     assert (Path(result['data_dir']) / 'tiny.map').read_bytes() == b'type octile\nheight 1\nwidth 3\nmap\n...\n'
     assert result['receipt']['manifest_sha256'] == hashlib.sha256(
         json.dumps(manifest, sort_keys=True).encode()).hexdigest()
@@ -221,7 +221,7 @@ def test_mapping_manifest_rejects_invalid_schema_before_side_effects(tmp_path, m
     with pytest.raises(ValueError, match='Invalid movingai manifest'):
         dataset_manifest('movingai', manifest=manifest)
     with pytest.raises(ValueError, match='Invalid movingai manifest'):
-        prepare_maps('movingai', manifest=manifest, artifact_root=root)
+        prepare_dataset('movingai', manifest=manifest, artifact_root=root)
     assert not root.exists()
 
 
@@ -230,7 +230,7 @@ def test_mapping_manifest_rejects_simultaneous_path_before_side_effects(staged_d
     with pytest.raises(ValueError, match='manifest'):
         dataset_manifest('movingai', manifest=manifest, manifest_path=options['manifest_path'])
     with pytest.raises(ValueError, match='manifest'):
-        prepare_maps('movingai', manifest=manifest, **options)
+        prepare_dataset('movingai', manifest=manifest, **options)
     assert not options['artifact_root'].exists()
 
 
@@ -241,12 +241,12 @@ def test_qd_mapping_manifest_rejects_automatic_acquisition_before_side_effects(t
     root = tmp_path / 'artifacts'
     manifest = {'schema_version': 1, 'dataset': 'qd_mapper', 'archives': []}
     with pytest.raises(ValueError, match='permission_unverified'):
-        prepare_maps('qd_mapper', manifest=manifest, artifact_root=root)
+        prepare_dataset('qd_mapper', manifest=manifest, artifact_root=root)
     assert not root.exists()
 
 
 def test_prepare_verifies_packaged_cities():
-    result = prepare_maps('cities_tiles')
+    result = prepare_dataset('cities_tiles')
     assert result == {'dataset': 'cities_tiles', 'map_count': 128,
                       'asset_sha256': '3d357b87c64bab6a08a8ec43cfe81295ed37fd4a14db36d563e4ae599785664f'}
 
@@ -261,7 +261,7 @@ def test_prepare_restores_existing_data_when_replacement_fails(staged_dataset, m
     import os
 
     options, _, _, _ = staged_dataset
-    result = prepare_maps('movingai', **options)
+    result = prepare_dataset('movingai', **options)
     data = Path(result['data_dir'])
     original = (data / 'tiny.map').read_bytes()
     receipt = (data / 'receipt.json').read_bytes()
@@ -274,7 +274,7 @@ def test_prepare_restores_existing_data_when_replacement_fails(staged_dataset, m
 
     monkeypatch.setattr('pogema_toolbox.datasets.os.replace', fail_new_data)
     with pytest.raises(OSError, match='replacement failed'):
-        prepare_maps('movingai', **options)
+        prepare_dataset('movingai', **options)
     assert (data / 'tiny.map').read_bytes() == original
     assert (data / 'receipt.json').read_bytes() == receipt
     assert not list(data.parent.glob('.prepare-*'))
