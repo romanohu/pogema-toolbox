@@ -9,7 +9,7 @@ importer retains its existing `remove_border=True` default.
 
 ```python
 from pathlib import Path
-from pogema_toolbox.moving_ai_ingestion import (
+from pogema_toolbox import (
     parse_movingai_map, parse_movingai_scenarios, movingai_grid_config,
 )
 
@@ -32,7 +32,7 @@ replay supports `on_target="nothing"` (default) or `"finish"`. A bounded cache
 of four layouts reuses component labels across scenario files and prefix sizes.
 
 ```python
-from pogema_toolbox.generators.scenario_generator import ScenarioSampler
+from pogema_toolbox import ScenarioSampler
 
 sampler = ScenarioSampler(obstacles)
 config = sampler.generate(32, 42, sampling="uniform", on_target="nothing")
@@ -89,17 +89,16 @@ and collision system may be supplied, but explicit positions, map dimensions,
 binary encodings and counts cannot be overridden through `grid_options`.
 
 The pinned Pogema custom-sequence implementation initializes its goal cursor at
-zero although target zero is already active. Neural-MAPF's evaluator sets
-`env.unwrapped.current_goal_indices = [1] * num_agents` after reset, so each
-arrival advances to the next supplied target. Direct Pogema callers wanting
-that same consumption order should apply this cursor adjustment after each
-reset. Without it, Pogema repeats target zero on the first arrival. These APIs
-return `GridConfig` objects and do not modify Pogema behavior.
+zero although target zero is already active. For direct Pogema replay, set
+`env.unwrapped.current_goal_indices = [1] * num_agents` after each reset so each
+arrival advances to the next supplied target. Without it, Pogema repeats target
+zero on the first arrival. These APIs return `GridConfig` objects and do not
+modify Pogema behavior.
 
 ## Local QD-MAPPER scenarios
 
 ```python
-from pogema_toolbox.generators.qd_mapper import load_qd_map
+from pogema_toolbox import load_qd_map
 
 qd_map = load_qd_map("research-map.json")
 config = qd_map.grid_config(0, 32, max_episode_steps=256)

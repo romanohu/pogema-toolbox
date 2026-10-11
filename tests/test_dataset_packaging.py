@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -81,3 +82,53 @@ print('standalone preparation and generation verified')
     env.pop('PYTHONPATH', None)
     smoke = subprocess.run([sys.executable, '-I', '-c', script, str(installed), str(tmp_path / 'artifacts')], cwd=tmp_path, env=env, check=True, capture_output=True, text=True)
     assert smoke.stdout.strip() == 'standalone preparation and generation verified'
+
+    guard = tmp_path / 'guard'
+    guard.mkdir()
+    (guard / 'sitecustomize.py').write_text('''
+import importlib.abc
+import sys
+class ForbidTraining(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in ('neural_mapf', 'hydra', 'omegaconf', 'torch', 'dask', 'matplotlib'):
+            raise AssertionError('standalone CLI imported ' + fullname)
+sys.meta_path.insert(0, ForbidTraining())
+''')
+    env['PYTHONPATH'] = os.pathsep.join([str(guard), str(installed)])
+    config = tmp_path / 'delivery.yaml'
+    shutil.copyfile(ROOT / 'examples/delivery.yaml', config)
+    for name, command in [('console', [str(installed / 'bin/pogema-toolbox')]),
+                          ('module', [sys.executable, '-m', 'pogema_toolbox'])]:
+        listed = subprocess.run(command + ['datasets', 'list'], cwd=tmp_path, env=env,
+                                check=True, capture_output=True, text=True)
+        assert {entry['name'] for entry in json.loads(listed.stdout)} == {'movingai', 'cities_tiles', 'qd_mapper'}
+        assert not listed.stderr
+        prepared = subprocess.run(command + ['datasets', 'prepare', 'cities_tiles'],
+                                  cwd=tmp_path, env=env, check=True, capture_output=True, text=True)
+        assert json.loads(prepared.stdout)['map_count'] == 128 and not prepared.stderr
+        output = tmp_path / name
+        generated = subprocess.run(command + ['datasets', 'generate', '--config', 'delivery.yaml',
+                                   '--output-dir', str(output)], cwd=tmp_path, env=env,
+                                   check=True, capture_output=True, text=True)
+        result = json.loads(generated.stdout)
+        assert result['ready_groups'] == 4 and result['episodes'] == 8 and not generated.stderr
+        verify = '''
+from pathlib import Path
+import json
+import sys
+from pogema_toolbox import load_instances
+import pogema_toolbox
+assert Path(sys.argv[1]).resolve() in Path(pogema_toolbox.__file__).resolve().parents
+index = Path(sys.argv[2])
+suite = json.loads(index.read_text())
+assert suite['provenance']['toolbox_revision'] is None
+for group in suite['groups']:
+    instances = load_instances(index.parent / group['instances_path'])
+    assert len(instances) == 2
+    assert all(i.grid_config['on_target'] == 'restart' for i in instances)
+    assert all(len(s) == 33 for i in instances for s in i.goal_sequences)
+print('installed CLI instance loading verified')
+'''
+        loaded = subprocess.run([sys.executable, '-c', verify, str(installed), result['suite_path']],
+                                cwd=tmp_path, env=env, check=True, capture_output=True, text=True)
+        assert loaded.stdout.strip() == 'installed CLI instance loading verified' and not loaded.stderr
