@@ -65,6 +65,9 @@ assert not root.exists()
 from pogema_toolbox import Instance, generate_instances, generate_suite, prepare_dataset
 assert prepare_dataset is datasets.prepare_dataset
 assert Instance([[0, 0]], [[0, 0]], [[0, 1]], {}).to_grid_config().num_agents == 1
+grid = Instance([[0]], [[0, 0]], [[0, 0]], {}).to_grid_config()
+assert grid.map == [[0]] and (grid.width, grid.height, grid.size) == (1, 1, 1)
+assert Instance.from_grid_config(grid).to_grid_config().model_dump() == grid.model_dump()
 assert len(generate_instances({'grid': {'size': 8, 'density': 0, 'num_agents': 1},
                                'episodes': 1, 'generation_seed': 3})) == 1
 result = generate_suite({'dataset': 'cities_tiles', 'mode': 'single',

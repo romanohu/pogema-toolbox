@@ -149,6 +149,10 @@ class Instance:
                           if self.goal_sequences else [list(p) for p in self.goals],
                           num_agents=len(self.starts),
                           width=len(self.obstacles[0]), height=len(self.obstacles))
+        if owned['size'] == 1:
+            # Pogema validates size >= 2 before the map derives 1x1 dimensions.
+            for key in ('width', 'height', 'size'):
+                parameters.pop(key, None)
         return GridConfig(**parameters)
 
 

@@ -102,3 +102,24 @@ def test_original_sparse_config_id_remains_valid():
         id='3c6142bb9a90b36e063a590f8b7667f22a4d5f6e306cb478b3cb91f99b27d6d4'))
     instance.to_grid_config()
     assert instance.id == '3c6142bb9a90b36e063a590f8b7667f22a4d5f6e306cb478b3cb91f99b27d6d4'
+
+
+@pytest.mark.parametrize('captured', [False, True])
+def test_single_cell_conversion_preserves_explicit_grid_and_saved_payload(captured):
+    grid = GridConfig(map=[[0]], agents_xy=[[0, 0]], targets_xy=[[0, 0]],
+                      num_agents=1, on_target='nothing')
+    instance = (Instance.from_grid_config(grid) if captured else
+                Instance([[0]], [[0, 0]], [[0, 0]], {'on_target': 'nothing'}))
+    saved = instance.to_dict()
+    expected = hashlib.sha256(json.dumps({key: value for key, value in saved.items() if key != 'id'},
+        sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    converted = instance.to_grid_config()
+    assert converted.map == [[0]]
+    assert converted.agents_xy == converted.targets_xy == [[0, 0]]
+    assert (converted.width, converted.height, converted.size, converted.num_agents) == (1, 1, 1, 1)
+    assert converted.on_target == 'nothing'
+    assert instance.to_dict() == saved and instance.id == expected
+    round_trip = Instance.from_grid_config(converted)
+    assert Instance.from_grid_config(round_trip.to_grid_config()).to_dict() == round_trip.to_dict()
+    if captured:
+        assert round_trip.to_dict() == saved
