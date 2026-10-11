@@ -163,7 +163,7 @@ def test_malformed_benchmark_fields_fail_concisely(tmp_path, field, value):
     assert not (tmp_path / 'generated').exists()
 
 
-@pytest.mark.parametrize('error', [RuntimeError, KeyError])
+@pytest.mark.parametrize('error', [RuntimeError, KeyError, TypeError])
 def test_unexpected_programming_error_is_not_success_json(tmp_path, monkeypatch, capsys, error):
     from pogema_toolbox.cli import main
 
@@ -210,3 +210,29 @@ def test_malformed_custom_catalog_reports_missing_field(tmp_path, operation):
     assert 'custom dataset manifest' in result.stderr and 'archives' in result.stderr
     assert not result.stdout and 'Traceback' not in result.stderr
     assert not (tmp_path / 'maps').exists() and not (tmp_path / 'generated').exists()
+
+
+@pytest.mark.parametrize('field', ['suite_path', 'manifest_path', 'instances_path'])
+@pytest.mark.parametrize('value', [['bad'], {'bad': 'path'}, 7, False])
+def test_malformed_benchmark_path_fails_concisely(tmp_path, field, value):
+    benchmark = yaml.safe_load((ROOT / 'examples/delivery.yaml').read_text())
+    benchmark[field] = value
+    (tmp_path / 'invalid.yaml').write_text(yaml.safe_dump(benchmark))
+    result = run_cli('datasets', 'generate', '--config', 'invalid.yaml',
+                     '--output-dir', 'generated', cwd=tmp_path)
+    assert result.returncode != 0 and field in result.stderr
+    assert 'string' in result.stderr and 'Traceback' not in result.stderr
+    assert not result.stdout and not (tmp_path / 'generated').exists()
+
+
+def test_optional_null_benchmark_paths_keep_generation_defaults(tmp_path):
+    benchmark = yaml.safe_load((ROOT / 'examples/delivery.yaml').read_text())
+    benchmark.update(suite_path=None, manifest_path=None, instances_path=None)
+    (tmp_path / 'delivery.yaml').write_text(yaml.safe_dump(benchmark))
+    result = run_cli('datasets', 'generate', '--config', 'delivery.yaml',
+                     '--output-dir', 'generated', cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert not result.stderr
+    generated = json.loads(result.stdout)
+    assert Path(generated['suite_path']) == tmp_path / 'generated/suite.json'
+    assert generated['ready_groups'] == 4 and generated['episodes'] == 8

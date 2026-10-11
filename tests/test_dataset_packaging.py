@@ -97,6 +97,8 @@ sys.meta_path.insert(0, ForbidTraining())
     env['PYTHONPATH'] = os.pathsep.join([str(guard), str(installed)])
     config = tmp_path / 'delivery.yaml'
     shutil.copyfile(ROOT / 'examples/delivery.yaml', config)
+    invalid_config = tmp_path / 'invalid.yaml'
+    invalid_config.write_text(config.read_text() + '\nsuite_path: [bad]\n')
     for name, command in [('console', [str(installed / 'bin/pogema-toolbox')]),
                           ('module', [sys.executable, '-m', 'pogema_toolbox'])]:
         listed = subprocess.run(command + ['datasets', 'list'], cwd=tmp_path, env=env,
@@ -132,3 +134,9 @@ print('installed CLI instance loading verified')
         loaded = subprocess.run([sys.executable, '-c', verify, str(installed), result['suite_path']],
                                 cwd=tmp_path, env=env, check=True, capture_output=True, text=True)
         assert loaded.stdout.strip() == 'installed CLI instance loading verified' and not loaded.stderr
+        invalid = subprocess.run(command + ['datasets', 'generate', '--config', 'invalid.yaml',
+                                 '--output-dir', 'invalid-output'], cwd=tmp_path, env=env,
+                                 capture_output=True, text=True)
+        assert invalid.returncode != 0 and 'suite_path' in invalid.stderr
+        assert 'string' in invalid.stderr and 'Traceback' not in invalid.stderr
+        assert not invalid.stdout and not (tmp_path / 'invalid-output').exists()

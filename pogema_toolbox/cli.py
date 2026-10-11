@@ -60,6 +60,9 @@ def _benchmark(path):
                if key not in benchmark]
     if missing:
         raise ValueError('Benchmark is missing required fields: ' + ', '.join(missing))
+    for key in ('suite_path', 'manifest_path', 'instances_path'):
+        if benchmark.get(key) is not None and not isinstance(benchmark[key], str):
+            raise ValueError(f'{key} must be a string or null')
     for key in ('grid', 'layout'):
         if key in benchmark and not isinstance(benchmark[key], dict):
             raise ValueError(f'{key} must be a mapping')
