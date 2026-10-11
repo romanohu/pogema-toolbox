@@ -236,3 +236,19 @@ def test_optional_null_benchmark_paths_keep_generation_defaults(tmp_path):
     generated = json.loads(result.stdout)
     assert Path(generated['suite_path']) == tmp_path / 'generated/suite.json'
     assert generated['ready_groups'] == 4 and generated['episodes'] == 8
+
+
+@pytest.mark.parametrize('field', ['map_names', 'collections'])
+@pytest.mark.parametrize('value', [[['empty-8-8']], [{'name': 'empty-8-8'}], [7], [False]])
+def test_nested_named_list_members_fail_concisely(tmp_path, field, value):
+    benchmark = dict(dataset='movingai', map_names=['empty-8-8'], agent_counts=[1],
+        scenario_numbers=[1], scenario_family='random', sampling='replay',
+        episodes=1, generation_seed=0, grid={})
+    benchmark[field] = value
+    (tmp_path / 'benchmark.yaml').write_text(yaml.safe_dump(benchmark))
+    result = run_cli('datasets', 'generate', '--config', 'benchmark.yaml',
+                     '--output-dir', 'generated', cwd=tmp_path)
+    assert result.returncode != 0
+    assert field in result.stderr and 'strings' in result.stderr
+    assert 'Traceback' not in result.stderr and not result.stdout
+    assert not (tmp_path / 'generated').exists()

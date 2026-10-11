@@ -72,8 +72,11 @@ def _benchmark(path):
         if key in benchmark and not isinstance(benchmark[key], list):
             raise ValueError(f'{key} must be a list')
     for key in ('map_names', 'collections'):
-        if key in benchmark and benchmark[key] is not None and not isinstance(benchmark[key], list):
-            raise ValueError(f'{key} must be a list')
+        if benchmark.get(key) is not None:
+            if not isinstance(benchmark[key], list):
+                raise ValueError(f'{key} must be a list')
+            if any(not isinstance(name, str) for name in benchmark[key]):
+                raise ValueError(f'{key} must contain strings')
     if dataset in ('delivery', 'sortation') and 'on_target' not in benchmark['grid']:
         raise ValueError('grid is missing required field: on_target')
     if dataset in ('delivery', 'sortation'):

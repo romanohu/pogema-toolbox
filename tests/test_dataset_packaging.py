@@ -140,3 +140,14 @@ print('installed CLI instance loading verified')
         assert invalid.returncode != 0 and 'suite_path' in invalid.stderr
         assert 'string' in invalid.stderr and 'Traceback' not in invalid.stderr
         assert not invalid.stdout and not (tmp_path / 'invalid-output').exists()
+
+        nested_config = tmp_path / 'nested.yaml'
+        nested_config.write_text("dataset: movingai\nmap_names: [[empty-8-8]]\nagent_counts: [1]\n"
+                                 "scenario_numbers: [1]\nscenario_family: random\nsampling: replay\n"
+                                 "episodes: 1\ngeneration_seed: 0\ngrid: {}\n")
+        nested = subprocess.run(command + ['datasets', 'generate', '--config', 'nested.yaml',
+                                '--output-dir', 'nested-output'], cwd=tmp_path, env=env,
+                                capture_output=True, text=True)
+        assert nested.returncode != 0 and 'map_names' in nested.stderr
+        assert 'strings' in nested.stderr and 'Traceback' not in nested.stderr
+        assert not nested.stdout and not (tmp_path / 'nested-output').exists()
