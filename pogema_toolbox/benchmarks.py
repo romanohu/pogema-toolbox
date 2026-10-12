@@ -295,7 +295,7 @@ def _validate_procedural_ranges(settings):
             raise ValueError('num_wall_rows and num_wall_cols ranges must be supplied together')
 
 
-def _generate_procedural(benchmark, index):
+def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
     import numpy as np
     from pogema_toolbox.generators.delivery_generator import DeliveryRangeSettings, generate_delivery
     from pogema_toolbox.generators.maze_generator import MazeRangeSettings, MazeGenerator
@@ -303,7 +303,7 @@ def _generate_procedural(benchmark, index):
     from pogema_toolbox.generators.room_generator import RoomRangeSettings, generate_room
     from pogema_toolbox.generators.sortation_generator import SortationRangeSettings, generate_sortation
     from pogema_toolbox.generators.warehouse_generator import WarehouseRangeSettings, generate_warehouse
-    from pogema_toolbox.generators.scenario_generator import ScenarioSampler
+    from pogema_toolbox.generators.scenario_generator import ScenarioSampler, _grid_config
     settings_type, generator = {'delivery': (DeliveryRangeSettings, generate_delivery),
                                'sortation': (SortationRangeSettings, generate_sortation),
                                'maze': (MazeRangeSettings, MazeGenerator.generate_maze),
@@ -339,45 +339,104 @@ def _generate_procedural(benchmark, index):
     if unknown:
         raise ValueError('Unknown layout fields: ' + ', '.join(str(key) for key in unknown))
     settings = settings_type(**benchmark['layout'])
-    if not task_layout:
+    if not task_layout or validator is not None:
         _validate_procedural_ranges(settings)
+    if validator is not None:
+        targets = [[(1, 1), (0, 1)]] if on_target == 'restart' else [(1, 1)]
+        _grid_config(np.zeros((2, 2), dtype=np.int8), [(0, 0)], targets, **options)
+
+    def create_layout(map_seed):
+        parameters = settings.sample(int(map_seed))
+        layout = generator(parameters) if benchmark['dataset'] == 'random' else generator(**parameters)
+        if task_layout:
+            obstacles = layout.obstacles
+            sampler = ScenarioSampler(obstacles, layout.pickup_cells, layout.delivery_cells)
+        else:
+            obstacles = (MazeGenerator.string_to_array(layout) if isinstance(layout, str) else layout)
+            sampler = ScenarioSampler(obstacles)
+            obstacles = sampler.obstacles
+            parameters = {key: value.item() if isinstance(value, np.generic) else value
+                          for key, value in parameters.items()}
+        metadata = {'layout_parameters': parameters, 'map_seed': int(map_seed),
+            'binary_grid_sha256': hashlib.sha256(obstacles.tobytes()).hexdigest(),
+            'dimensions': list(obstacles.shape),
+            'coordinate_transform': 'generated (row, column); no cropping'}
+        if task_layout:
+            metadata.update(pickup_cells=layout.pickup_cells, delivery_cells=layout.delivery_cells)
+        return sampler, metadata
+
     index.parent.mkdir(parents=True, exist_ok=True)
     groups = []
+    retry_stride = len(map_seeds) * len(counts) * total
+    retry_map_seed = max(map_seeds) + 1
+    retry_scenario_seed = int(seed) + len(map_seeds) * total
     for position, map_seed in enumerate(map_seeds):
         name = f"{benchmark['dataset']}-{map_seed}"
         try:
-            parameters = settings.sample(int(map_seed))
-            layout = generator(parameters) if benchmark['dataset'] == 'random' else generator(**parameters)
-            if task_layout:
-                obstacles = layout.obstacles
-                sampler = ScenarioSampler(obstacles, layout.pickup_cells, layout.delivery_cells)
-            else:
-                obstacles = (MazeGenerator.string_to_array(layout) if isinstance(layout, str) else layout)
-                sampler = ScenarioSampler(obstacles)
-                obstacles = sampler.obstacles
-                parameters = {key: value.item() if isinstance(value, np.generic) else value
-                              for key, value in parameters.items()}
-            map_metadata = {'layout_parameters': parameters, 'map_seed': int(map_seed),
-                'binary_grid_sha256': hashlib.sha256(obstacles.tobytes()).hexdigest(),
-                'dimensions': list(obstacles.shape),
-                'coordinate_transform': 'generated (row, column); no cropping'}
-            if task_layout:
-                map_metadata.update(pickup_cells=layout.pickup_cells, delivery_cells=layout.delivery_cells)
+            sampler, map_metadata = create_layout(map_seed)
             error = None
         except ValueError as exc:
             error = f'{type(exc).__name__}: {exc}'
-        for count in counts:
+        for count_position, count in enumerate(counts):
             seeds = [int(seed) + position * total + i for i in range(total)]
             metadata = {'map_name': name, 'map_seed': int(map_seed), 'num_agents': count,
                         'sampling': benchmark['sampling'], 'on_target': on_target,
                         'generation_seeds': seeds, 'scenario_origin': 'new_scenarios'}
             group = {'name': f'{name}-{count}', 'metadata': metadata, 'requested_episode_count': total}
             try:
-                if error:
-                    raise ValueError(error)
-                metadata.update(map_metadata)
-                instances = [_from_grid(sampler.generate(count, episode_seed,
-                    sampling=benchmark['sampling'], **options)) for episode_seed in seeds]
+                if validator is None:
+                    if error:
+                        raise ValueError(error)
+                    metadata.update(map_metadata)
+                    instances = [_from_grid(sampler.generate(count, episode_seed,
+                        sampling=benchmark['sampling'], **options)) for episode_seed in seeds]
+                else:
+                    metadata['requested_map_seed'] = metadata.pop('map_seed')
+                    metadata['requested_generation_seeds'] = seeds
+                    metadata['generation_seeds'] = []
+                    metadata['scenario_origin'] = 'validated_new_maps'
+                    metadata['instances'] = []
+                    metadata['validation'] = {'regenerate_layout': True, 'max_attempts': max_attempts, 'attempts': []}
+                    instances = []
+                    for episode, initial_seed in enumerate(seeds):
+                        slot = (position * len(counts) + count_position) * total + episode
+                        for attempt in range(max_attempts):
+                            offset = slot + (attempt - 1) * retry_stride
+                            actual_map_seed = int(map_seed) if attempt == 0 else retry_map_seed + offset
+                            actual_seed = initial_seed if attempt == 0 else retry_scenario_seed + offset
+                            record = {'episode_index': episode, 'attempt': attempt + 1,
+                                      'map_seed': actual_map_seed, 'generation_seed': actual_seed,
+                                      'instance_id': None, 'accepted': False}
+                            try:
+                                if attempt == 0:
+                                    if error:
+                                        raise ValueError(error)
+                                    current_sampler, current_map = sampler, map_metadata
+                                else:
+                                    current_sampler, current_map = create_layout(actual_map_seed)
+                                instance = _from_grid(current_sampler.generate(count, actual_seed,
+                                    sampling=benchmark['sampling'], **options))
+                            except ValueError as exc:
+                                record.update(status='generation_error', error=f'{type(exc).__name__}: {exc}')
+                            else:
+                                try:
+                                    report = validator(instance)
+                                except Exception as exc:
+                                    raise RuntimeError(f'Instance validator failed: {exc}') from exc
+                                if (not isinstance(report, dict) or not isinstance(report.get('accepted'), bool)
+                                        or not isinstance(report.get('status'), str) or not report['status']):
+                                    raise TypeError('validator must return a mapping with boolean accepted and nonempty status')
+                                record = {**report, **{key: value for key, value in record.items() if key != 'accepted'},
+                                          'instance_id': instance.id}
+                            metadata['validation']['attempts'].append(record)
+                            if record['accepted']:
+                                instances.append(instance)
+                                metadata['generation_seeds'].append(actual_seed)
+                                metadata['instances'].append(dict(current_map, instance_id=instance.id,
+                                                                  generation_seed=actual_seed))
+                                break
+                        else:
+                            raise ValueError(f'Episode {episode} exhausted {max_attempts} validation attempts')
                 _save_group(index, group, instances)
             except (OSError, ValueError) as exc:
                 group.update(status='invalid', episode_count=0, error=f'{type(exc).__name__}: {exc}')
@@ -386,7 +445,7 @@ def _generate_procedural(benchmark, index):
         {'generator': generator.__module__ + '.' + generator.__qualname__})
 
 
-def generate_suite(benchmark, *, output_dir, artifact_root='.') -> dict:
+def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, max_attempts=100) -> dict:
     """Persist seeded dataset groups without downloading or constructing a policy."""
     from pogema_toolbox.moving_ai_ingestion import (
         parse_movingai_map, parse_movingai_scenarios, movingai_grid_config,
@@ -397,10 +456,16 @@ def generate_suite(benchmark, *, output_dir, artifact_root='.') -> dict:
     if dataset not in ('movingai', 'cities_tiles', 'qd_mapper', 'delivery', 'sortation',
                         'maze', 'warehouse', 'room', 'random'):
         raise ValueError('Unsupported dataset')
+    if validator is not None:
+        if not callable(validator):
+            raise TypeError('validator must be callable')
+        max_attempts = _positive_integers([max_attempts], 'max_attempts')[0]
+        if dataset not in ('delivery', 'sortation', 'maze', 'warehouse', 'room', 'random'):
+            raise ValueError('Validated map regeneration requires a procedural dataset')
     index = (_artifact_path(artifact_root, benchmark['suite_path']) if benchmark.get('suite_path')
              else Path(output_dir).expanduser().resolve() / 'suite.json')
     if dataset in ('delivery', 'sortation', 'maze', 'warehouse', 'room', 'random'):
-        return _generate_procedural(benchmark, index)
+        return _generate_procedural(benchmark, index, validator, max_attempts)
     manifest = dataset_manifest(dataset, artifact_root=artifact_root,
                                 manifest_path=benchmark.get('manifest_path'),
                                 manifest=benchmark.get('manifest'))

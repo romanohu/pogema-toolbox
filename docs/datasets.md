@@ -167,6 +167,22 @@ each start and its targets in the same free-space component. Restart instances
 retain exact goal sequences through the requested horizon. An agent count that
 exceeds placement capacity is recorded as an invalid group.
 
+The Python API optionally accepts `validator=validate_instance` and
+`max_attempts=100`. Your callable receives one `Instance` and returns a
+JSON-compatible dictionary with boolean `accepted` and nonempty string `status`;
+additional fields such as planner makespan are retained in the attempt record.
+This applies to the six procedural families, including Delivery and Sortation.
+Each rejected candidate regenerates its entire layout, starts and targets using
+deterministic replacement seeds within the same configured ranges. Accepted
+episodes are retained. `max_attempts` includes the initial candidate and applies
+to each requested episode; an exhausted group is explicitly invalid rather than
+saved with fewer episodes. Candidate placement failures also consume an attempt;
+validator exceptions abort generation. Fixed-map datasets reject this option.
+Validated groups store actual map metadata in `metadata.instances` and attempt
+records in `metadata.validation`; `requested_map_seed` labels the original
+request, and `generation_seeds` lists the accepted scenario seeds. Toolbox does
+not depend on a particular planner or construct one for you.
+
 The suite saves exact instance JSONL files, sampled layout parameters, the map
 seed, actual binary-grid dimensions and SHA-256, and original generator
 provenance. Layouts are preserved without resizing or cropping: the original
