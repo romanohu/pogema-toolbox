@@ -201,7 +201,7 @@ def test_resolved_custom_manifest_and_explicit_index(tmp_path, fixed_sources):
     assert not (tmp_path / 'unused').exists()
 
 
-@pytest.mark.parametrize('dataset', ['unknown', 'random'])
+@pytest.mark.parametrize('dataset', ['unknown', 'procedural'])
 def test_unsupported_dataset_fails_before_output(tmp_path, dataset):
     with pytest.raises(ValueError, match='Unsupported dataset'):
         generate_suite({'dataset': dataset}, output_dir=tmp_path / 'unused')

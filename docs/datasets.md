@@ -101,14 +101,84 @@ See [scenario parsing and sampling](scenarios.md) for parser and sampler details
 
 ## Suite generation
 
+Maze, Warehouse, Room and Random layouts use the existing toolbox generators and
+need no dataset preparation. A plain mapping selects the generator, layout
+ranges, map seeds, agent counts and independently seeded scenarios:
+
+```python
+from pathlib import Path
+import yaml
+from pogema_toolbox import generate_suite
+
+benchmark = {
+    "dataset": "maze",
+    "map_seeds": [0, 1],
+    "agent_counts": [8, 16, 32],
+    "episodes": 5,
+    "generation_seed": 42,
+    "sampling": "uniform",
+    "layout": {
+        "width_min": 31, "width_max": 41,
+        "height_min": 31, "height_max": 41,
+        "obstacle_density_min": 0.1, "obstacle_density_max": 0.3,
+        "wall_components_min": 1, "wall_components_max": 8,
+        "go_straight_min": 0.75, "go_straight_max": 0.85,
+    },
+    "grid": {
+        "on_target": "nothing", "max_episode_steps": 256,
+        "obs_radius": 5, "collision_system": "priority",
+        "observation_type": "POMAPF",
+    },
+}
+Path("maze.yaml").write_text(yaml.safe_dump(benchmark))
+result = generate_suite(benchmark, output_dir="artifacts/maze")
+```
+
+The same mapping works through the installed CLI:
+
+```bash
+pogema-toolbox datasets generate --config maze.yaml --output-dir artifacts/maze
+python -m pogema_toolbox datasets generate --config maze.yaml --output-dir artifacts/maze
+```
+
+Change `dataset` and `layout` together to select another family. Omitting a layout
+field uses its original generator default; `layout: {}` uses all defaults.
+
+| Dataset | Original settings | Layout fields (each range has `_min` and `_max`) |
+| --- | --- | --- |
+| `maze` | `MazeRangeSettings` | `width`, `height`, `obstacle_density`, `wall_components`, `go_straight` |
+| `warehouse` | `WarehouseRangeSettings` | `size`, `wall_width`, `wall_height`; fixed `side_pad`, `horizontal_gap`, `vertical_gap` or paired ranges; optional paired `num_wall_rows` and `num_wall_cols` ranges; booleans `wfi_instance`, `block_extra_space` |
+| `room` | `RoomRangeSettings` | `room_width`, `room_height`, `num_rows`, `num_cols`, `obstacle_density`; booleans `uniform`, `only_centre_obstacles` |
+| `random` | `MapRangeSettings` | `width`, `height`, `obstacle_density` |
+
+Integer ranges are inclusive. Densities must be finite numbers in `[0, 1]`;
+Maze's `go_straight` range must be within `[0, 1]` with an upper bound smaller than
+`1`. Optional Warehouse ranges must include both bounds, and wall row/column
+ranges must be supplied together. With wall counts, the original Warehouse
+generator derives a square from the sampled wall geometry. Room's `uniform`
+setting makes room width equal room height and column count equal row count.
+
+Map generation uses only `map_seeds`. Scenario seeds are
+`generation_seed + map_position * episodes + episode`, shared across agent-count
+groups on that map, with zero-based map positions and episodes. All four families
+use `sampling: uniform`; `grid.on_target`
+supports `nothing`, `finish` and `restart` (default `nothing`). The sampler places
+each start and its targets in the same free-space component. Restart instances
+retain exact goal sequences through the requested horizon. An agent count that
+exceeds placement capacity is recorded as an invalid group.
+
+The suite saves exact instance JSONL files, sampled layout parameters, the map
+seed, actual binary-grid dimensions and SHA-256, and original generator
+provenance. Layouts are preserved without resizing or cropping: the original
+Maze generator changes an even requested dimension to the next odd dimension,
+and the recorded dimensions describe its actual output. Load the saved groups
+to give every evaluated model the same maps, starts and targets:
+
 ```python
 import json
 from pathlib import Path
-import yaml
-from pogema_toolbox import generate_suite, load_instances
+from pogema_toolbox import load_instances
 
-benchmark = yaml.safe_load(Path("examples/delivery.yaml").read_text())
-result = generate_suite(benchmark, output_dir="artifacts/delivery", artifact_root="artifacts")
 index = Path(result["suite_path"])
 suite = json.loads(index.read_text())
 first_group = suite["groups"][0]

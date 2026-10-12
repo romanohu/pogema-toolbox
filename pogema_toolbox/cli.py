@@ -50,6 +50,10 @@ def _benchmark(path):
     required = {
         'delivery': ('layout', 'map_seeds', 'sampling', 'grid'),
         'sortation': ('layout', 'map_seeds', 'sampling', 'grid'),
+        'maze': ('layout', 'map_seeds', 'sampling', 'grid'),
+        'warehouse': ('layout', 'map_seeds', 'sampling', 'grid'),
+        'room': ('layout', 'map_seeds', 'sampling', 'grid'),
+        'random': ('layout', 'map_seeds', 'sampling', 'grid'),
         'cities_tiles': ('mode', 'map_name'),
         'movingai': ('map_names', 'scenario_numbers', 'scenario_family', 'sampling', 'grid'),
         'qd_mapper': ('map_names', 'scenario_numbers', 'sampling', 'grid'),
@@ -79,8 +83,14 @@ def _benchmark(path):
                 raise ValueError(f'{key} must contain strings')
     if dataset in ('delivery', 'sortation') and 'on_target' not in benchmark['grid']:
         raise ValueError('grid is missing required field: on_target')
-    if dataset in ('delivery', 'sortation'):
-        settings = toolbox.DeliveryRangeSettings if dataset == 'delivery' else toolbox.SortationRangeSettings
+    if dataset in ('delivery', 'sortation', 'maze', 'warehouse', 'room', 'random'):
+        from pogema_toolbox.generators.maze_generator import MazeRangeSettings
+        from pogema_toolbox.generators.random_generator import MapRangeSettings
+        from pogema_toolbox.generators.room_generator import RoomRangeSettings
+        from pogema_toolbox.generators.warehouse_generator import WarehouseRangeSettings
+        settings = {'delivery': toolbox.DeliveryRangeSettings, 'sortation': toolbox.SortationRangeSettings,
+                    'maze': MazeRangeSettings, 'warehouse': WarehouseRangeSettings,
+                    'room': RoomRangeSettings, 'random': MapRangeSettings}[dataset]
         unknown = set(benchmark['layout']) - {field.name for field in fields(settings)}
         if unknown:
             raise ValueError('Unknown layout fields: ' + ', '.join(str(key) for key in unknown))

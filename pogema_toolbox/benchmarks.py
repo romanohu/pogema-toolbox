@@ -4,7 +4,9 @@ Ported from Neural-MAPF; see licenses/Neural-MAPF-LICENSE for its MIT notice.
 """
 import hashlib
 import json
-from numbers import Integral
+from dataclasses import fields
+from math import isfinite
+from numbers import Integral, Real
 from pathlib import Path
 import re
 from copy import deepcopy
@@ -256,12 +258,66 @@ def _generate_qd(benchmark, manifest, index, artifact_root):
                         'generator': _generate_qd.__module__ + '.' + _generate_qd.__name__})
 
 
+def _validate_procedural_ranges(settings):
+    from pogema_toolbox.generators.scenario_generator import _integer
+    for field in fields(settings):
+        if not field.name.endswith('_min'):
+            continue
+        name = field.name[:-4]
+        lower, upper = getattr(settings, name + '_min'), getattr(settings, name + '_max')
+        if lower is None and upper is None and field.default is None:
+            continue
+        if lower is None or upper is None:
+            raise ValueError(f'{name}_min and {name}_max must be supplied together')
+        if name in ('obstacle_density', 'go_straight'):
+            if any(isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value)
+                   or not 0 <= value <= 1 for value in (lower, upper)):
+                raise ValueError(f'{name} ranges must contain finite numbers in [0, 1]')
+            if name == 'go_straight' and lower == 1:
+                raise ValueError('go_straight_min must be smaller than 1')
+        else:
+            minimum = 0 if name in ('wall_components', 'side_pad', 'horizontal_gap', 'vertical_gap',
+                                    'num_wall_rows', 'num_wall_cols') else 1
+            lower = _integer(lower, name + '_min', minimum)
+            upper = _integer(upper, name + '_max', minimum)
+        if lower > upper:
+            raise ValueError(f'{name}_min must not exceed {name}_max')
+    for name in ('side_pad', 'horizontal_gap', 'vertical_gap'):
+        if hasattr(settings, name):
+            _integer(getattr(settings, name), name)
+    for name in ('uniform', 'only_centre_obstacles', 'wfi_instance', 'block_extra_space'):
+        if hasattr(settings, name) and not isinstance(getattr(settings, name), bool):
+            raise ValueError(f'{name} must be a boolean')
+    if hasattr(settings, 'num_wall_rows_min'):
+        ranges = [settings.num_wall_rows_min, settings.num_wall_rows_max,
+                  settings.num_wall_cols_min, settings.num_wall_cols_max]
+        if any(value is None for value in ranges) and not all(value is None for value in ranges):
+            raise ValueError('num_wall_rows and num_wall_cols ranges must be supplied together')
+
+
 def _generate_procedural(benchmark, index):
+    import numpy as np
     from pogema_toolbox.generators.delivery_generator import DeliveryRangeSettings, generate_delivery
+    from pogema_toolbox.generators.maze_generator import MazeRangeSettings, MazeGenerator
+    from pogema_toolbox.generators.random_generator import MapRangeSettings, generate_map
+    from pogema_toolbox.generators.room_generator import RoomRangeSettings, generate_room
     from pogema_toolbox.generators.sortation_generator import SortationRangeSettings, generate_sortation
+    from pogema_toolbox.generators.warehouse_generator import WarehouseRangeSettings, generate_warehouse
     from pogema_toolbox.generators.scenario_generator import ScenarioSampler
     settings_type, generator = {'delivery': (DeliveryRangeSettings, generate_delivery),
-                               'sortation': (SortationRangeSettings, generate_sortation)}[benchmark['dataset']]
+                               'sortation': (SortationRangeSettings, generate_sortation),
+                               'maze': (MazeRangeSettings, MazeGenerator.generate_maze),
+                               'warehouse': (WarehouseRangeSettings, generate_warehouse),
+                               'room': (RoomRangeSettings, generate_room),
+                               'random': (MapRangeSettings, generate_map)}[benchmark['dataset']]
+    task_layout = benchmark['dataset'] in ('delivery', 'sortation')
+    if not task_layout:
+        for name in ('grid', 'layout'):
+            if not isinstance(benchmark[name], dict):
+                raise ValueError(f'{name} must be a mapping')
+        for name in ('map_seeds', 'agent_counts'):
+            if not isinstance(benchmark[name], (list, tuple)):
+                raise ValueError(f'{name} must be a list')
     map_seeds = list(benchmark['map_seeds'])
     if (not map_seeds or any(isinstance(s, bool) or not isinstance(s, Integral) or s < 0 for s in map_seeds)
             or len(set(map_seeds)) != len(map_seeds)):
@@ -271,32 +327,49 @@ def _generate_procedural(benchmark, index):
     seed = benchmark['generation_seed']
     if isinstance(seed, bool) or not isinstance(seed, Integral) or seed < 0:
         raise ValueError('generation_seed must be a nonnegative integer')
-    if benchmark['sampling'] not in ('uniform', 'endpoints'):
-        raise ValueError('sampling must be uniform or endpoints')
+    if benchmark['sampling'] not in (('uniform', 'endpoints') if task_layout else ('uniform',)):
+        raise ValueError('sampling must be uniform or endpoints' if task_layout else 'sampling must be uniform')
     options = benchmark['grid']
-    if options['on_target'] not in ('nothing', 'restart'):
+    on_target = options['on_target'] if task_layout else options.get('on_target', 'nothing')
+    if task_layout and on_target not in ('nothing', 'restart'):
         raise ValueError('procedural protocols must be nothing or restart')
+    if not task_layout and on_target not in ('nothing', 'finish', 'restart'):
+        raise ValueError('on_target must be nothing, finish or restart')
+    unknown = set(benchmark['layout']) - {field.name for field in fields(settings_type)}
+    if unknown:
+        raise ValueError('Unknown layout fields: ' + ', '.join(str(key) for key in unknown))
     settings = settings_type(**benchmark['layout'])
+    if not task_layout:
+        _validate_procedural_ranges(settings)
     index.parent.mkdir(parents=True, exist_ok=True)
     groups = []
     for position, map_seed in enumerate(map_seeds):
         name = f"{benchmark['dataset']}-{map_seed}"
         try:
             parameters = settings.sample(int(map_seed))
-            layout = generator(**parameters)
-            sampler = ScenarioSampler(layout.obstacles, layout.pickup_cells, layout.delivery_cells)
-            map_metadata = {'layout_parameters': parameters, 'map_seed': layout.map_seed,
-                'pickup_cells': layout.pickup_cells, 'delivery_cells': layout.delivery_cells,
-                'binary_grid_sha256': hashlib.sha256(layout.obstacles.tobytes()).hexdigest(),
-                'dimensions': list(layout.obstacles.shape),
+            layout = generator(parameters) if benchmark['dataset'] == 'random' else generator(**parameters)
+            if task_layout:
+                obstacles = layout.obstacles
+                sampler = ScenarioSampler(obstacles, layout.pickup_cells, layout.delivery_cells)
+            else:
+                obstacles = (MazeGenerator.string_to_array(layout) if isinstance(layout, str) else layout)
+                sampler = ScenarioSampler(obstacles)
+                obstacles = sampler.obstacles
+                parameters = {key: value.item() if isinstance(value, np.generic) else value
+                              for key, value in parameters.items()}
+            map_metadata = {'layout_parameters': parameters, 'map_seed': int(map_seed),
+                'binary_grid_sha256': hashlib.sha256(obstacles.tobytes()).hexdigest(),
+                'dimensions': list(obstacles.shape),
                 'coordinate_transform': 'generated (row, column); no cropping'}
+            if task_layout:
+                map_metadata.update(pickup_cells=layout.pickup_cells, delivery_cells=layout.delivery_cells)
             error = None
         except ValueError as exc:
             error = f'{type(exc).__name__}: {exc}'
         for count in counts:
             seeds = [int(seed) + position * total + i for i in range(total)]
             metadata = {'map_name': name, 'map_seed': int(map_seed), 'num_agents': count,
-                        'sampling': benchmark['sampling'], 'on_target': options['on_target'],
+                        'sampling': benchmark['sampling'], 'on_target': on_target,
                         'generation_seeds': seeds, 'scenario_origin': 'new_scenarios'}
             group = {'name': f'{name}-{count}', 'metadata': metadata, 'requested_episode_count': total}
             try:
@@ -310,7 +383,7 @@ def _generate_procedural(benchmark, index):
                 group.update(status='invalid', episode_count=0, error=f'{type(exc).__name__}: {exc}')
             groups.append(group)
     return _save_suite(benchmark, {'dataset': benchmark['dataset']}, index, groups,
-        {'generator': generator.__module__ + '.' + generator.__name__})
+        {'generator': generator.__module__ + '.' + generator.__qualname__})
 
 
 def generate_suite(benchmark, *, output_dir, artifact_root='.') -> dict:
@@ -321,11 +394,12 @@ def generate_suite(benchmark, *, output_dir, artifact_root='.') -> dict:
     from pogema_toolbox.generators.scenario_generator import ScenarioSampler
     benchmark = deepcopy(dict(benchmark))
     dataset = benchmark.get('dataset')
-    if dataset not in ('movingai', 'cities_tiles', 'qd_mapper', 'delivery', 'sortation'):
+    if dataset not in ('movingai', 'cities_tiles', 'qd_mapper', 'delivery', 'sortation',
+                        'maze', 'warehouse', 'room', 'random'):
         raise ValueError('Unsupported dataset')
     index = (_artifact_path(artifact_root, benchmark['suite_path']) if benchmark.get('suite_path')
              else Path(output_dir).expanduser().resolve() / 'suite.json')
-    if dataset in ('delivery', 'sortation'):
+    if dataset in ('delivery', 'sortation', 'maze', 'warehouse', 'room', 'random'):
         return _generate_procedural(benchmark, index)
     manifest = dataset_manifest(dataset, artifact_root=artifact_root,
                                 manifest_path=benchmark.get('manifest_path'),
