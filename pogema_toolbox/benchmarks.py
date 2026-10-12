@@ -16,7 +16,8 @@ from types import SimpleNamespace
 
 from . import __version__
 from .datasets import _artifact_path, data_directory, dataset_manifest, selected_path, sha256_file
-from .instances import Instance, save_instances
+from .instances import Instance, _atomic_text, save_instances
+from .generation_progress import GenerationProgress, generation_identity
 
 
 def _toolbox_revision():
@@ -117,20 +118,64 @@ def _save_group(index, group, instances):
     group.update(status='ready', instances_path=relative, sha256=sha256_file(path), episode_count=len(instances))
 
 
-def _save_suite(benchmark, manifest, index, groups, provenance):
+def _save_validation_plans(index, group):
+    attempts = group['metadata'].get('validation', {}).get('attempts', [])
+    plans = {record['instance_id']: dict(record) for record in attempts
+             if record['accepted'] and 'paths' in record}
+    if not plans:
+        return
+    relative = f'{group["name"]}/validation-plans.json'
+    path = selected_path(index.parent, relative)
+    with _atomic_text(path) as stream:
+        stream.write(json.dumps({'schema_version': 1, 'plans': plans}, allow_nan=False) + '\n')
+    group.update(validation_plans_path=relative, validation_plans_sha256=sha256_file(path))
+    for record in attempts:
+        if record['accepted']:
+            record.pop('paths', None)
+
+
+def _validation_summary(groups):
+    attempts = [attempt for group in groups
+                for attempt in group['metadata'].get('validation', {}).get('attempts', [])]
+    enabled = any('validation' in group['metadata'] for group in groups)
+    accepted = sum(attempt['accepted'] for attempt in attempts)
+    checked = sum(attempt['instance_id'] is not None for attempt in attempts)
+    retained = sum(group['episode_count'] for group in groups)
+    reasons = {}
+    for attempt in attempts:
+        if not attempt['accepted']:
+            reasons[attempt['status']] = reasons.get(attempt['status'], 0) + 1
+    return dict(enabled=enabled, total_attempts=len(attempts), solver_checked_candidates=checked,
+                accepted_attempts=accepted, retained_episodes=retained,
+                discarded_accepted_attempts=accepted - retained if enabled else 0,
+                invalid_groups=sum(group['status'] == 'invalid' for group in groups),
+                rejection_reasons=reasons, acceptance_rate=accepted / len(attempts) if attempts else None,
+                solver_acceptance_rate=accepted / checked if checked else None)
+
+
+def _suite_result(suite, index):
+    groups = suite['groups']
+    return {'suite_path': str(index), 'groups': len(groups),
+            'ready_groups': sum(g['status'] == 'ready' for g in groups),
+            'invalid_groups': [g for g in groups if g['status'] == 'invalid'],
+            'episodes': sum(g['episode_count'] for g in groups),
+            'validation_summary': suite['validation_summary']}
+
+
+def _save_suite(benchmark, manifest, index, groups, provenance, progress):
     suite = {'schema_version': 1, 'dataset': manifest['dataset'],
              'generation': benchmark,
              'provenance': dict(attribution=manifest.get('attribution'), rights=manifest.get('rights'),
                                 toolbox_version=__version__, toolbox_revision=_toolbox_revision(), **provenance),
-             'groups': groups}
-    index.write_text(json.dumps(suite, indent=2, allow_nan=False) + '\n')
-    return {'suite_path': str(index), 'groups': len(groups),
-            'ready_groups': sum(g['status'] == 'ready' for g in groups),
-            'invalid_groups': [g for g in groups if g['status'] == 'invalid'],
-            'episodes': sum(g['episode_count'] for g in groups)}
+             'groups': groups, 'validation_summary': _validation_summary(groups)}
+    suite['provenance'].update(progress.provenance)
+    with _atomic_text(index) as stream:
+        stream.write(json.dumps(suite, indent=2, allow_nan=False) + '\n')
+    progress.finish(suite)
+    return _suite_result(suite, index)
 
 
-def _generate_cities(benchmark, manifest, index):
+def _generate_cities(benchmark, manifest, index, progress):
     from pogema import pogema_v0
     from pogema_toolbox.generators.cities_generator import CitiesTilesGenerator, ASSET_SHA256
     from pogema_toolbox.generators.scenario_generator import ScenarioSampler
@@ -156,6 +201,7 @@ def _generate_cities(benchmark, manifest, index):
         num_agents=_positive_integers(benchmark['agent_counts'], 'agent_counts'),
         num_samples=None if benchmark['mode'] == 'official' else benchmark['episodes'], seed=benchmark['generation_seed'])
     selections = generator.generate()
+    progress.start()
     index.parent.mkdir(parents=True, exist_ok=True)
     groups = []
     for position, record in enumerate(selections):
@@ -167,6 +213,10 @@ def _generate_cities(benchmark, manifest, index):
         if benchmark['mode'] != 'official':
             name += f'-{position}'
         group = {'name': _name(name), 'metadata': metadata, 'requested_episode_count': 1}
+        completed = progress.group(group['name'])
+        if completed is not None:
+            groups.append(completed)
+            continue
         try:
             if getattr(record, 'error', None) is not None:
                 raise record.error
@@ -190,16 +240,18 @@ def _generate_cities(benchmark, manifest, index):
             metadata.update(binary_grid_sha256=hashlib.sha256(obstacles.astype('int8').tobytes()).hexdigest(),
                             dimensions=list(obstacles.shape), asset_sha256=ASSET_SHA256,
                             coordinate_transform='packaged tile (row, column); no cropping')
-            _save_group(index, group, [instance])
-        except (OSError, ValueError) as exc:
+        except ValueError as exc:
             group.update(status='invalid', episode_count=0, error=f'{type(exc).__name__}: {exc}')
+        else:
+            _save_group(index, group, [instance])
         groups.append(group)
+        progress.complete(group)
     return _save_suite(benchmark, manifest, index, groups, {'asset_sha256': ASSET_SHA256,
         'source_url': manifest['source_url'], 'source_revision': manifest['source_revision'],
-        'generator': _generate_cities.__module__ + '.' + _generate_cities.__name__})
+        'generator': _generate_cities.__module__ + '.' + _generate_cities.__name__}, progress)
 
 
-def _generate_qd(benchmark, manifest, index, artifact_root):
+def _generate_qd(benchmark, manifest, index, artifact_root, progress):
     from pogema_toolbox.generators.qd_mapper import load_qd_map
     from pogema_toolbox.generators.scenario_generator import ScenarioSampler
     from .datasets import selected_archives
@@ -218,11 +270,16 @@ def _generate_qd(benchmark, manifest, index, artifact_root):
     if isinstance(seed, bool) or not isinstance(seed, Integral) or seed < 0:
         raise ValueError('generation_seed must be a nonnegative integer')
     total = len(numbers) if benchmark['sampling'] == 'replay' else _positive_integers([benchmark['episodes']], 'episodes')[0]
+    progress.start()
     index.parent.mkdir(parents=True, exist_ok=True)
     options = benchmark['grid']
     data = data_directory(benchmark['dataset'], artifact_root=artifact_root)
     groups = []
     for position, name in enumerate(names):
+        completed = [progress.group(f'{name}-{count}') for count in counts]
+        if all(group is not None for group in completed):
+            groups.extend(completed)
+            continue
         relative = named[name]
         try:
             _, source_hash = _verified_source(data, relative, members, 'qd_mapper')
@@ -232,6 +289,10 @@ def _generate_qd(benchmark, manifest, index, artifact_root):
         except (OSError, ValueError) as exc:
             error = f'{type(exc).__name__}: {exc}'
         for count in counts:
+            completed = progress.group(f'{name}-{count}')
+            if completed is not None:
+                groups.append(completed)
+                continue
             seeds = [int(seed) + position * total + i for i in range(total)]
             metadata = {'map_name': name, 'collection': Path(relative).parent.name, 'source_path': relative,
                         'num_agents': count, 'sampling': benchmark['sampling'], 'generation_seeds': seeds,
@@ -248,14 +309,16 @@ def _generate_qd(benchmark, manifest, index, artifact_root):
                 instances = [_from_grid(source.grid_config(numbers[i] - 1, count, seed=episode_seed, **options)
                              if benchmark['sampling'] == 'replay' else sampler.generate(count, episode_seed, **options))
                              for i, episode_seed in enumerate(seeds)]
-                _save_group(index, group, instances)
-            except (OSError, ValueError) as exc:
+            except ValueError as exc:
                 group.update(status='invalid', episode_count=0, error=f'{type(exc).__name__}: {exc}')
+            else:
+                _save_group(index, group, instances)
             groups.append(group)
+            progress.complete(group)
     receipt = selected_path(data, 'receipt.json')
     return _save_suite(benchmark, manifest, index, groups,
                        {'receipt': json.loads(receipt.read_text()) if receipt.is_file() else None,
-                        'generator': _generate_qd.__module__ + '.' + _generate_qd.__name__})
+                        'generator': _generate_qd.__module__ + '.' + _generate_qd.__name__}, progress)
 
 
 def _validate_procedural_ranges(settings):
@@ -295,7 +358,7 @@ def _validate_procedural_ranges(settings):
             raise ValueError('num_wall_rows and num_wall_cols ranges must be supplied together')
 
 
-def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
+def _generate_procedural(benchmark, index, validator=None, max_attempts=100, resume=False, provenance=None):
     import numpy as np
     from pogema_toolbox.generators.delivery_generator import DeliveryRangeSettings, generate_delivery
     from pogema_toolbox.generators.maze_generator import MazeRangeSettings, MazeGenerator
@@ -344,6 +407,12 @@ def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
     if validator is not None:
         targets = [[(1, 1), (0, 1)]] if on_target == 'restart' else [(1, 1)]
         _grid_config(np.zeros((2, 2), dtype=np.int8), [(0, 0)], targets, **options)
+    progress = GenerationProgress(index, generation_identity(benchmark, {'dataset': benchmark['dataset']},
+                                                             '.', validator, max_attempts, resume, provenance), resume)
+    if progress.suite is not None:
+        return _suite_result(progress.suite, index)
+
+    progress.start()
 
     def create_layout(map_seed):
         parameters = settings.sample(int(map_seed))
@@ -372,12 +441,20 @@ def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
     retry_scenario_seed = int(seed) + len(map_seeds) * total
     for position, map_seed in enumerate(map_seeds):
         name = f"{benchmark['dataset']}-{map_seed}"
+        completed = [progress.group(f'{name}-{count}') for count in counts]
+        if all(group is not None for group in completed):
+            groups.extend(completed)
+            continue
         try:
             sampler, map_metadata = create_layout(map_seed)
             error = None
         except ValueError as exc:
             error = f'{type(exc).__name__}: {exc}'
         for count_position, count in enumerate(counts):
+            completed = progress.group(f'{name}-{count}')
+            if completed is not None:
+                groups.append(completed)
+                continue
             seeds = [int(seed) + position * total + i for i in range(total)]
             metadata = {'map_name': name, 'map_seed': int(map_seed), 'num_agents': count,
                         'sampling': benchmark['sampling'], 'on_target': on_target,
@@ -397,10 +474,14 @@ def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
                     metadata['scenario_origin'] = 'validated_new_maps'
                     metadata['instances'] = []
                     metadata['validation'] = {'regenerate_layout': True, 'max_attempts': max_attempts, 'attempts': []}
-                    instances = []
-                    for episode, initial_seed in enumerate(seeds):
+                    group, instances = progress.partial(group)
+                    metadata = group['metadata']
+                    for episode in range(len(instances), total):
+                        initial_seed = seeds[episode]
                         slot = (position * len(counts) + count_position) * total + episode
-                        for attempt in range(max_attempts):
+                        finished = sum(record['episode_index'] == episode
+                                       for record in metadata['validation']['attempts'])
+                        for attempt in range(finished, max_attempts):
                             offset = slot + (attempt - 1) * retry_stride
                             actual_map_seed = int(map_seed) if attempt == 0 else retry_map_seed + offset
                             actual_seed = initial_seed if attempt == 0 else retry_scenario_seed + offset
@@ -426,6 +507,10 @@ def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
                                 if (not isinstance(report, dict) or not isinstance(report.get('accepted'), bool)
                                         or not isinstance(report.get('status'), str) or not report['status']):
                                     raise TypeError('validator must return a mapping with boolean accepted and nonempty status')
+                                try:
+                                    json.dumps(report, allow_nan=False)
+                                except (TypeError, ValueError) as exc:
+                                    raise TypeError('validator must return a JSON-serializable mapping') from exc
                                 record = {**report, **{key: value for key, value in record.items() if key != 'accepted'},
                                           'instance_id': instance.id}
                             metadata['validation']['attempts'].append(record)
@@ -434,18 +519,24 @@ def _generate_procedural(benchmark, index, validator=None, max_attempts=100):
                                 metadata['generation_seeds'].append(actual_seed)
                                 metadata['instances'].append(dict(current_map, instance_id=instance.id,
                                                                   generation_seed=actual_seed))
+                            progress.attempt(group, instances)
+                            if record['accepted']:
                                 break
                         else:
                             raise ValueError(f'Episode {episode} exhausted {max_attempts} validation attempts')
-                _save_group(index, group, instances)
-            except (OSError, ValueError) as exc:
+            except ValueError as exc:
                 group.update(status='invalid', episode_count=0, error=f'{type(exc).__name__}: {exc}')
+            else:
+                _save_group(index, group, instances)
+            _save_validation_plans(index, group)
             groups.append(group)
+            progress.complete(group)
     return _save_suite(benchmark, {'dataset': benchmark['dataset']}, index, groups,
-        {'generator': generator.__module__ + '.' + generator.__qualname__})
+        {'generator': generator.__module__ + '.' + generator.__qualname__}, progress)
 
 
-def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, max_attempts=100) -> dict:
+def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, max_attempts=100,
+                   resume=False, provenance=None) -> dict:
     """Persist seeded dataset groups without downloading or constructing a policy."""
     from pogema_toolbox.moving_ai_ingestion import (
         parse_movingai_map, parse_movingai_scenarios, movingai_grid_config,
@@ -465,16 +556,21 @@ def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, 
     index = (_artifact_path(artifact_root, benchmark['suite_path']) if benchmark.get('suite_path')
              else Path(output_dir).expanduser().resolve() / 'suite.json')
     if dataset in ('delivery', 'sortation', 'maze', 'warehouse', 'room', 'random'):
-        return _generate_procedural(benchmark, index, validator, max_attempts)
+        return _generate_procedural(benchmark, index, validator, max_attempts, resume, provenance)
     manifest = dataset_manifest(dataset, artifact_root=artifact_root,
                                 manifest_path=benchmark.get('manifest_path'),
                                 manifest=benchmark.get('manifest'))
+    if dataset == 'movingai':
+        members = {relative: digest for archive in manifest['archives']
+                   for relative, digest in archive['members'].items()}
+    progress = GenerationProgress(index, generation_identity(benchmark, manifest, artifact_root,
+                                                             validator, max_attempts, resume, provenance), resume)
+    if progress.suite is not None:
+        return _suite_result(progress.suite, index)
     if dataset == 'cities_tiles':
-        return _generate_cities(benchmark, manifest, index)
+        return _generate_cities(benchmark, manifest, index, progress)
     if dataset == 'qd_mapper':
-        return _generate_qd(benchmark, manifest, index, artifact_root)
-    members = {relative: digest for archive in manifest['archives']
-               for relative, digest in archive['members'].items()}
+        return _generate_qd(benchmark, manifest, index, artifact_root, progress)
     names = list(benchmark['map_names']) if benchmark['map_names'] is not None else manifest['maps']
     if not names or len(set(names)) != len(names):
         raise ValueError('map_names must be nonempty and unique')
@@ -490,10 +586,15 @@ def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, 
         raise ValueError('generation_seed must be a nonnegative integer')
     total = len(numbers) if benchmark['sampling'] == 'replay' else _positive_integers([benchmark['episodes']], 'episodes')[0]
     options = benchmark['grid']
+    progress.start()
     index.parent.mkdir(parents=True, exist_ok=True)
     data = data_directory(benchmark['dataset'], artifact_root=artifact_root)
     groups = []
     for map_index, name in enumerate(names):
+        completed = [progress.group(f'{name}-{count}') for count in counts]
+        if all(group is not None for group in completed):
+            groups.extend(completed)
+            continue
         try:
             text, map_hash = _verified_source(data, name + '.map', members)
             obstacles = parse_movingai_map(text)
@@ -514,6 +615,10 @@ def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, 
             map_error = f'{type(exc).__name__}: {exc}'
         for count in counts:
             group_name = f'{name}-{count}'
+            completed = progress.group(group_name)
+            if completed is not None:
+                groups.append(completed)
+                continue
             seeds = [int(seed) + map_index * total + i for i in range(total)]
             metadata = {'map_name': name, 'num_agents': count, 'sampling': benchmark['sampling'],
                         'scenario_family': benchmark['scenario_family'],
@@ -530,14 +635,13 @@ def generate_suite(benchmark, *, output_dir, artifact_root='.', validator=None, 
                             if benchmark['sampling'] == 'replay' else
                             sampler.generate(count, episode_seed, **options))
                     instances.append(_from_grid(grid))
-                relative = f'{group_name}/instances.jsonl'
-                path = selected_path(index.parent, relative)
-                save_instances(instances, path)
-                group.update(status='ready', instances_path=relative, sha256=sha256_file(path), episode_count=len(instances))
-            except (OSError, ValueError) as exc:
+            except ValueError as exc:
                 group.update(status='invalid', episode_count=0, error=f'{type(exc).__name__}: {exc}')
+            else:
+                _save_group(index, group, instances)
             groups.append(group)
+            progress.complete(group)
     receipt_path = selected_path(data, 'receipt.json')
     return _save_suite(benchmark, manifest, index, groups,
                        {'receipt': json.loads(receipt_path.read_text()) if receipt_path.is_file() else None,
-                        'generator': generate_suite.__module__ + '.' + generate_suite.__name__})
+                        'generator': generate_suite.__module__ + '.' + generate_suite.__name__}, progress)

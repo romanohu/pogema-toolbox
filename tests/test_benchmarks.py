@@ -164,6 +164,7 @@ print(json.dumps(generate_benchmark(config)))
                 assert all(i.grid_config['on_target'] == 'restart' and i.goal_sequences for i in instances)
                 assert all(len(s) == 4 for i in instances for s in i.goal_sequences)
     for data in [suite, old_suite]:
+        data.pop('validation_summary', None)
         data['generation'].pop('suite_path', None)
         data['provenance'].pop('generator', None)
         data['provenance'].pop('toolbox_revision', None)

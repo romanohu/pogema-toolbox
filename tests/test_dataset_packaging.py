@@ -101,16 +101,16 @@ sys.meta_path.insert(0, ForbidTraining())
     invalid_config.write_text(config.read_text() + '\nsuite_path: [bad]\n')
     for name, command in [('console', [str(installed / 'bin/pogema-toolbox')]),
                           ('module', [sys.executable, '-m', 'pogema_toolbox'])]:
-        listed = subprocess.run(command + ['datasets', 'list'], cwd=tmp_path, env=env,
+        listed = subprocess.run(command + ['datasets', 'list', '--json'], cwd=tmp_path, env=env,
                                 check=True, capture_output=True, text=True)
         assert {entry['name'] for entry in json.loads(listed.stdout)} == {'movingai', 'cities_tiles', 'qd_mapper'}
         assert not listed.stderr
-        prepared = subprocess.run(command + ['datasets', 'prepare', 'cities_tiles'],
+        prepared = subprocess.run(command + ['datasets', 'prepare', 'cities_tiles', '--json'],
                                   cwd=tmp_path, env=env, check=True, capture_output=True, text=True)
         assert json.loads(prepared.stdout)['map_count'] == 128 and not prepared.stderr
         output = tmp_path / name
         generated = subprocess.run(command + ['datasets', 'generate', '--config', 'delivery.yaml',
-                                   '--output-dir', str(output)], cwd=tmp_path, env=env,
+                                   '--output-dir', str(output), '--json'], cwd=tmp_path, env=env,
                                    check=True, capture_output=True, text=True)
         result = json.loads(generated.stdout)
         assert result['ready_groups'] == 4 and result['episodes'] == 8 and not generated.stderr

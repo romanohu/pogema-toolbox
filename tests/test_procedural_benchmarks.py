@@ -268,7 +268,7 @@ def run_cli(tmp_path, benchmark):
     (tmp_path / 'benchmark.yaml').write_text(yaml.safe_dump(benchmark))
     return subprocess.run([sys.executable, '-m', 'pogema_toolbox', 'datasets', 'generate',
                            '--config', 'benchmark.yaml', '--output-dir', 'generated',
-                           '--artifact-root', 'artifacts'], cwd=tmp_path,
+                           '--artifact-root', 'artifacts', '--json'], cwd=tmp_path,
                           env=dict(os.environ, PYTHONPATH=str(ROOT)), capture_output=True, text=True)
 
 

@@ -5,10 +5,13 @@ Ported from Neural-MAPF; see licenses/Neural-MAPF-LICENSE for its MIT notice.
 from dataclasses import dataclass
 from collections import deque
 from functools import lru_cache
+from contextlib import contextmanager
 import hashlib
 import json
 from numbers import Integral
+import os
 from pathlib import Path
+import tempfile
 from typing import Optional
 
 MOVES = ((0, 0), (-1, 0), (1, 0), (0, -1), (0, 1))
@@ -156,10 +159,24 @@ class Instance:
         return GridConfig(**parameters)
 
 
-def save_instances(instances, path):
+@contextmanager
+def _atomic_text(path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('w') as stream:
+    descriptor, temporary = tempfile.mkstemp(prefix=f'.{path.name}.', suffix='.tmp', dir=path.parent)
+    try:
+        with os.fdopen(descriptor, 'w') as stream:
+            yield stream
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def save_instances(instances, path):
+    with _atomic_text(path) as stream:
         for instance in instances:
             stream.write(json.dumps(instance.to_dict(), allow_nan=False) + '\n')
 

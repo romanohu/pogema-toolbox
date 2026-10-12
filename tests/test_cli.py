@@ -47,7 +47,7 @@ def test_invalid_commands_fail_on_stderr(tmp_path, arguments):
 
 
 def test_list_reports_catalog_rights_without_creating_artifacts(tmp_path):
-    result = run_cli('datasets', 'list', cwd=tmp_path)
+    result = run_cli('datasets', 'list', '--json', cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     catalogs = {entry['name']: entry for entry in json.loads(result.stdout)}
     assert set(catalogs) == {'movingai', 'cities_tiles', 'qd_mapper'}
@@ -71,7 +71,7 @@ def test_prepare_passes_relative_manifest_staging_and_offline_options(tmp_path):
     (tmp_path / 'manifest.yaml').write_text(yaml.safe_dump(manifest))
     result = run_cli('datasets', 'prepare', 'movingai', '--artifact-root', 'artifacts',
                      '--manifest-path', '../manifest.yaml', '--staged-dir', '../staged',
-                     '--offline', '--timeout-seconds', '2.5', cwd=tmp_path)
+                     '--offline', '--timeout-seconds', '2.5', '--json', cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     prepared = json.loads(result.stdout)
     assert prepared['map_count'] == 1
@@ -91,7 +91,7 @@ def test_prepare_local_collections_preserves_supplied_order(tmp_path):
         schema_version=1, dataset='qd_mapper', archives=archives)))
     result = run_cli('datasets', 'prepare', 'qd_mapper', '--artifact-root', 'artifacts',
                      '--manifest-path', '../manifest.yaml', '--local-dir', '../local',
-                     '--collections', 'LTF', 'CBS', '--offline', cwd=tmp_path)
+                     '--collections', 'LTF', 'CBS', '--offline', '--json', cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert [a['name'] for a in json.loads(result.stdout)['receipt']['archives']] == ['LTF', 'CBS']
 
@@ -101,7 +101,7 @@ def test_procedural_generation_uses_cwd_config_and_artifact_paths(tmp_path):
     benchmark['suite_path'] = 'suites/delivery.json'
     (tmp_path / 'delivery.yaml').write_text(yaml.safe_dump(benchmark))
     result = run_cli('datasets', 'generate', '--config', 'delivery.yaml',
-                     '--output-dir', 'unused', '--artifact-root', 'artifacts', cwd=tmp_path)
+                     '--output-dir', 'unused', '--artifact-root', 'artifacts', '--json', cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     generated = json.loads(result.stdout)
     index = tmp_path / 'artifacts/suites/delivery.json'
@@ -189,7 +189,7 @@ def test_nonfinite_result_is_not_emitted_as_json(monkeypatch, capsys):
     from pogema_toolbox.cli import main
 
     monkeypatch.setattr('pogema_toolbox.prepare_dataset', lambda *args, **kwargs: {'value': float('nan')})
-    assert main(['datasets', 'prepare', 'cities_tiles']) != 0
+    assert main(['datasets', 'prepare', 'cities_tiles', '--json']) != 0
     captured = capsys.readouterr()
     assert not captured.out and 'error:' in captured.err
 
@@ -230,7 +230,7 @@ def test_optional_null_benchmark_paths_keep_generation_defaults(tmp_path):
     benchmark.update(suite_path=None, manifest_path=None, instances_path=None)
     (tmp_path / 'delivery.yaml').write_text(yaml.safe_dump(benchmark))
     result = run_cli('datasets', 'generate', '--config', 'delivery.yaml',
-                     '--output-dir', 'generated', cwd=tmp_path)
+                     '--output-dir', 'generated', '--json', cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert not result.stderr
     generated = json.loads(result.stdout)
@@ -252,3 +252,79 @@ def test_nested_named_list_members_fail_concisely(tmp_path, field, value):
     assert field in result.stderr and 'strings' in result.stderr
     assert 'Traceback' not in result.stderr and not result.stdout
     assert not (tmp_path / 'generated').exists()
+
+
+def test_default_list_output_is_a_concise_catalog_summary(tmp_path):
+    result = run_cli('datasets', 'list', cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert all(name in result.stdout for name in ('movingai', 'cities_tiles', 'qd_mapper'))
+    assert len(result.stdout.splitlines()) <= 5
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(result.stdout)
+
+
+def test_default_prepare_output_summarizes_map_count(tmp_path):
+    result = run_cli('datasets', 'prepare', 'cities_tiles', cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert '128' in result.stdout and 'maps' in result.stdout and 'cities_tiles' in result.stdout
+    assert 'sha256' not in result.stdout and len(result.stdout.splitlines()) <= 3
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(result.stdout)
+
+
+def test_default_generation_summarizes_partial_invalid_groups(tmp_path):
+    benchmark = yaml.safe_load((ROOT / 'examples/delivery.yaml').read_text())
+    benchmark.update(map_seeds=[3], agent_counts=[2, 10000])
+    (tmp_path / 'delivery.yaml').write_text(yaml.safe_dump(benchmark))
+    result = run_cli('datasets', 'generate', '--config', 'delivery.yaml', '--output-dir', 'generated', cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert '1 ready' in result.stdout and '1 invalid' in result.stdout and '2 episodes' in result.stdout
+    assert str(tmp_path / 'generated/suite.json') in result.stdout
+    assert 'delivery-3-10000' in result.stdout and 'sha256' not in result.stdout
+    assert len(result.stdout.splitlines()) <= 4
+
+
+@pytest.mark.parametrize('json_mode', [False, True])
+def test_generation_without_ready_episodes_exits_nonzero_with_summary(tmp_path, json_mode):
+    benchmark = yaml.safe_load((ROOT / 'examples/delivery.yaml').read_text())
+    benchmark.update(map_seeds=[3], agent_counts=[10000])
+    (tmp_path / 'delivery.yaml').write_text(yaml.safe_dump(benchmark))
+    arguments = ['datasets', 'generate', '--config', 'delivery.yaml', '--output-dir', 'generated']
+    if json_mode:
+        arguments.append('--json')
+    result = run_cli(*arguments, cwd=tmp_path)
+    assert result.returncode != 0 and not result.stderr
+    if json_mode:
+        generated = json.loads(result.stdout)
+        assert generated['episodes'] == 0 and generated['validation_summary']['invalid_groups'] == 1
+    else:
+        assert '0 episodes' in result.stdout and '1 invalid' in result.stdout
+    assert (tmp_path / 'generated/suite.json').is_file()
+
+
+def test_cli_resumes_an_interrupted_procedural_suite(tmp_path, monkeypatch):
+    import pogema_toolbox.benchmarks as benchmarks
+    benchmark = yaml.safe_load((ROOT / 'examples/delivery.yaml').read_text())
+    benchmark['agent_counts'] = [2]
+    (tmp_path / 'delivery.yaml').write_text(yaml.safe_dump(benchmark))
+    baseline = benchmarks.generate_suite(benchmark, output_dir=tmp_path / 'baseline')
+    convert = benchmarks._from_grid
+
+    def interrupt_second_group(grid):
+        if grid.seed >= 44:
+            raise KeyboardInterrupt
+        return convert(grid)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(benchmarks, '_from_grid', interrupt_second_group)
+        with pytest.raises(KeyboardInterrupt):
+            benchmarks.generate_suite(benchmark, output_dir=tmp_path / 'generated')
+    prefix = tmp_path / 'generated/delivery-7-2/instances.jsonl'
+    before = prefix.read_bytes()
+    result = run_cli('datasets', 'generate', '--config', 'delivery.yaml', '--output-dir', 'generated',
+                     '--resume', '--json', cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    generated = json.loads(result.stdout)
+    assert generated['episodes'] == 4 and generated['ready_groups'] == 2
+    assert prefix.read_bytes() == before
+    assert json.loads(Path(generated['suite_path']).read_text()) == json.loads(Path(baseline['suite_path']).read_text())

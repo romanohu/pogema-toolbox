@@ -97,12 +97,31 @@ def _benchmark(path):
     return benchmark
 
 
+def _summary(operation, result):
+    if operation == 'list':
+        return 'Dataset catalogs ({}):\n{}'.format(len(result), '\n'.join(entry['name'] for entry in result))
+    if operation == 'prepare':
+        output = f'Prepared {result["dataset"]}: {result["map_count"]} maps.'
+        if result.get('data_dir'):
+            output += '\nData directory: ' + result['data_dir']
+        return output
+    invalid = result['invalid_groups']
+    output = (f'Generated suite: {result["ready_groups"]} ready groups, '
+              f'{len(invalid)} invalid groups, {result["episodes"]} episodes.\n'
+              f'Suite: {result["suite_path"]}')
+    if invalid:
+        output += '\nInvalid groups: ' + ', '.join(group['name'] for group in invalid[:3])
+        if len(invalid) > 3:
+            output += f' (+{len(invalid) - 3} more)'
+    return output
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='pogema-toolbox', description='Prepare datasets and generate explicit instance suites.')
     groups = parser.add_subparsers(dest='command')
     datasets = groups.add_parser('datasets', help='List, prepare and generate datasets')
     operations = datasets.add_subparsers(dest='operation')
-    operations.add_parser('list', help='Show packaged catalog summaries and rights')
+    listing = operations.add_parser('list', help='Show packaged catalog summaries and rights')
     prepare = operations.add_parser('prepare', help='Explicitly verify or acquire a dataset')
     prepare.add_argument('dataset', metavar='DATASET')
     prepare.add_argument('--artifact-root', default='.', metavar='DIR')
@@ -116,6 +135,9 @@ def main(argv=None):
     generate.add_argument('--config', required=True, metavar='BENCHMARK.yaml')
     generate.add_argument('--output-dir', required=True, metavar='DIR')
     generate.add_argument('--artifact-root', default='.', metavar='DIR')
+    generate.add_argument('--resume', action='store_true', help='Resume saved generation with matching inputs')
+    for operation in (listing, prepare, generate):
+        operation.add_argument('--json', action='store_true', help='Print the full machine-readable result')
     arguments = parser.parse_args(argv)
     if arguments.command is None:
         parser.print_help()
@@ -137,8 +159,10 @@ def main(argv=None):
             benchmark = _benchmark(arguments.config)
             custom_manifest = benchmark.get('manifest_path') is not None or benchmark.get('manifest') is not None
             result = toolbox.generate_suite(benchmark, output_dir=arguments.output_dir,
-                                            artifact_root=arguments.artifact_root)
+                                            artifact_root=arguments.artifact_root, resume=arguments.resume)
         output = json.dumps(result, allow_nan=False)
+        if not arguments.json:
+            output = _summary(arguments.operation, result)
     except KeyError as exc:
         if not custom_manifest:
             raise
@@ -151,4 +175,4 @@ def main(argv=None):
         print(f'pogema-toolbox: error: {exc}', file=sys.stderr)
         return 1
     print(output)
-    return 0
+    return 1 if arguments.operation == 'generate' and result['episodes'] == 0 else 0
